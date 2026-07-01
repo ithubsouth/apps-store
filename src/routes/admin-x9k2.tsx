@@ -240,14 +240,16 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
     setIcon(null);
   }
 
-  async function uploadWithSignedUrl(signedUrl: string, file: File) {
-    // Signed upload URLs from supabase accept PUT with the file body.
-    const res = await fetch(signedUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
-    if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+  async function uploadWithSignedUrl(
+    bucket: string,
+    path: string,
+    token: string,
+    file: File,
+  ) {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .uploadToSignedUrl(path, token, file, { contentType: file.type || undefined });
+    if (error) throw new Error(error.message);
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
