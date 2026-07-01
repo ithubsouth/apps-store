@@ -270,10 +270,10 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
         data: { apkFilename: apk.name, iconFilename: icon?.name ?? null },
       });
       setProgress("Uploading APK...");
-      await uploadWithSignedUrl(urls.apk.url, apk);
+      await uploadWithSignedUrl("apks", urls.apk.path, urls.apk.token, apk);
       if (icon && urls.icon) {
         setProgress("Uploading icon...");
-        await uploadWithSignedUrl(urls.icon.url, icon);
+        await uploadWithSignedUrl("app-icons", urls.icon.path, urls.icon.token, icon);
       }
       setProgress("Saving app...");
       await create({
