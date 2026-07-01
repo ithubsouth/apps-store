@@ -56,12 +56,8 @@ export const getDownloadUrl = createServerFn({ method: "POST" })
       .from(APK_BUCKET)
       .createSignedUrl(row.apk_path, DOWNLOAD_URL_TTL, { download: row.apk_filename });
     if (sErr || !signed) throw new Error(sErr?.message ?? "Failed to sign URL");
-    // Best-effort counter bump
-    await sb.rpc("noop").catch(() => {});
-    await sb
-      .from("apps")
-      .update({ download_count: (await currentDownloads(data.id)) + 1 })
-      .eq("id", data.id);
+    const current = await currentDownloads(data.id);
+    await sb.from("apps").update({ download_count: current + 1 }).eq("id", data.id);
     return { url: signed.signedUrl };
   });
 
