@@ -76,17 +76,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
+      { name: "description", content: "Browse and download apps." },
+      { name: "author", content: "Admin" },
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "LEAD Internal App Store" },
-      { name: "description", content: "Browse and download internal LEAD apps." },
-      { name: "author", content: "LEAD" },
-      { property: "og:title", content: "LEAD Internal App Store" },
-      { property: "og:description", content: "Browse and download internal LEAD apps." },
+      { title: "App Store" },
+      { property: "og:title", content: "App Store" },
+      { property: "og:description", content: "Browse and download apps." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "LEAD Internal App Store" },
-      { name: "twitter:description", content: "Browse and download internal LEAD apps." },
+      { name: "twitter:title", content: "App Store" },
+      { name: "twitter:description", content: "Browse and download apps." },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

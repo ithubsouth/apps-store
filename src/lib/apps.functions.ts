@@ -38,10 +38,19 @@ export const listApps = createServerFn({ method: "GET" }).handler(async () => {
     .select("*")
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
+
+  // Also get audit logs for history
+  const { data: logs } = await sb
+    .from("audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50)
+    .catch(() => ({ data: [] }));
+
   const rows = await Promise.all(
     (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
   );
-  return rows;
+  return { apps: rows, history: logs ?? [] };
 });
 
 export const getApp = createServerFn({ method: "GET" })
@@ -133,6 +142,7 @@ export const createApp = createServerFn({ method: "POST" })
       apk_path: string;
       apk_filename: string;
       icon_path?: string | null;
+      adminName: string;
     }) => d,
   )
   .handler(async ({ data }) => {
@@ -149,6 +159,8 @@ export const createApp = createServerFn({ method: "POST" })
         apk_path: data.apk_path,
         apk_filename: data.apk_filename,
         icon_path: data.icon_path ?? null,
+        created_by: data.adminName,
+        updated_by: data.adminName,
       })
       .select("*")
       .single();
@@ -156,11 +168,54 @@ export const createApp = createServerFn({ method: "POST" })
     return row;
   });
 
-export const deleteApp = createServerFn({ method: "POST" })
-  .inputValidator((d: { id: string }) => d)
+export const updateApp = createServerFn({ method: "POST" })
+  .inputValidator(
+    (d: {
+      id: string;
+      name: string;
+      category: string;
+      description: string;
+      version: string;
+      adminName: string;
+    }) => d,
+  )
   .handler(async ({ data }) => {
     await adminAssert();
     const sb = await admin();
+    const { data: row, error } = await sb
+      .from("apps")
+      .update({
+        name: data.name.trim(),
+        category: data.category.trim(),
+        description: data.description.trim(),
+        version: data.version.trim(),
+        updated_by: data.adminName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const deleteApp = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; adminName: string }) => d)
+  .handler(async ({ data }) => {
+    await adminAssert();
+    const sb = await admin();
+
+    // Log deletion manually because triggers lose context on DELETE
+    const { data: existing } = await sb.from("apps").select("name").eq("id", data.id).single();
+    if (existing) {
+      await sb.from("audit_logs").insert({
+        app_id: data.id,
+        app_name: existing.name,
+        action: "DELETE",
+        performed_by: data.adminName,
+      });
+    }
+
     const { data: row } = await sb
       .from("apps")
       .select("apk_path, icon_path")

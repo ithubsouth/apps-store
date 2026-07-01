@@ -1,21 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, type FormEvent } from "react";
-import { Loader2, LogOut, Lock, Shield, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { useState, type FormEvent, useMemo } from "react";
+import { Loader2, LogOut, Lock, Shield, Trash2, Upload, Eye, EyeOff, History, Edit2, Check, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   getAdminStatus,
   lockAdmin,
   unlockAdmin,
+  fixDatabaseSecurity,
 } from "@/lib/gate.functions";
 import {
   createApp,
+  updateApp,
   createUploadUrls,
   deleteApp,
   listApps,
 } from "@/lib/apps.functions";
-import { SiteHeader, formatBytes } from "@/components/site-header";
+import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
@@ -36,19 +38,29 @@ function AdminPage() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <div className="mx-auto max-w-5xl px-6 py-10">
-        <div className="mb-8 flex items-center gap-3">
-          <span
-            className="grid h-11 w-11 place-items-center rounded-2xl text-primary-foreground"
-            style={{ background: "var(--gradient-hero)" }}
-          >
-            <Shield className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="font-display text-2xl font-bold">Admin console</h1>
-            <p className="text-sm text-muted-foreground">
-              Upload and manage APKs for the internal store.
-            </p>
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span
+              className="grid h-11 w-11 place-items-center rounded-2xl text-primary-foreground"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              <Shield className="h-5 w-5" />
+            </span>
+            <div>
+              <h1 className="font-display text-2xl font-bold">Admin console</h1>
+              <p className="text-sm text-muted-foreground">
+                Upload and manage APKs for the internal store.
+              </p>
+            </div>
           </div>
+          {data?.isAdmin && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Logged in as:</span>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                {typeof window !== 'undefined' ? localStorage.getItem("admin_name") || "Admin" : "Admin"}
+              </span>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -66,17 +78,23 @@ function AdminPage() {
 function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
   const unlock = useServerFn(unlockAdmin);
   const [pwd, setPwd] = useState("");
+  const [name, setName] = useState(typeof window !== 'undefined' ? localStorage.getItem("admin_name") || "" : "");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState(false);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!name.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
     setPending(true);
     setError(false);
     try {
       const { ok } = await unlock({ data: { passcode: pwd } });
       if (ok) {
+        localStorage.setItem("admin_name", name);
         toast.success("Admin access granted");
         onUnlocked();
       } else {
@@ -100,32 +118,44 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
         <Lock className="h-4 w-4" />
         <span className="text-sm font-semibold">Admin access</span>
       </div>
-      <h2 className="font-display text-xl font-bold">Enter the admin passcode</h2>
+      <h2 className="font-display text-xl font-bold">Enter your details</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        This page is restricted to LEAD admins.
+        Identify yourself to manage the store.
       </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <div className="relative">
+      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your Name</label>
           <input
-            type={showPwd ? "text" : "password"}
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
-            autoFocus
-            placeholder="Passcode"
-            className="w-full rounded-xl border border-input bg-background pl-4 pr-11 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. John Doe"
+            className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2"
           />
-          <button
-            type="button"
-            onClick={() => setShowPwd(!showPwd)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Admin Passcode</label>
+          <div className="relative">
+            <input
+              type={showPwd ? "text" : "password"}
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              placeholder="Passcode"
+              className="w-full rounded-xl border border-input bg-background pl-4 pr-11 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPwd(!showPwd)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         {error && <p className="text-xs text-destructive">Incorrect passcode.</p>}
         <button
           type="submit"
-          disabled={pending || !pwd}
+          disabled={pending || !pwd || !name}
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-primary-foreground shadow-sm disabled:opacity-60"
           style={{ background: "var(--gradient-hero)" }}
         >
@@ -138,11 +168,26 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
 
 function AdminPanel({ onLock }: { onLock: () => void }) {
   const lock = useServerFn(lockAdmin);
+  const fix = useServerFn(fixDatabaseSecurity);
   const qc = useQueryClient();
-  const { data: apps, refetch, isLoading } = useQuery({
-    queryKey: ["apps"],
+  const [adminSearch, setAdminSearch] = useState("");
+  const { data, refetch, isLoading } = useQuery({
+    queryKey: ["apps-admin"],
     queryFn: () => listApps(),
   });
+
+  const apps = data?.apps || [];
+  const history = data?.history || [];
+
+  const filteredApps = useMemo(() => {
+    const query = adminSearch.toLowerCase().trim();
+    if (!query) return apps;
+    return apps.filter((app: any) =>
+      app.name.toLowerCase().includes(query) ||
+      app.version.toLowerCase().includes(query) ||
+      (app.created_by || "").toLowerCase().includes(query)
+    );
+  }, [apps, adminSearch]);
 
   async function handleLock() {
     await lock();
@@ -151,9 +196,30 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
     onLock();
   }
 
+  async function handleFix() {
+    toast.loading("Attempting to fix security...", { id: "fix" });
+    const res = await fix();
+    if (res.success) {
+      toast.success(res.message, { id: "fix" });
+      refetch();
+    } else {
+      toast.error("Could not fix automatically. Please use the Supabase SQL Editor.", {
+        id: "fix",
+        description: "Paste: ALTER TABLE public.apps DISABLE ROW LEVEL SECURITY;"
+      });
+    }
+  }
+
   return (
-    <div className="space-y-8">
-      <div className="flex justify-end">
+    <div className="space-y-10">
+      <div className="flex justify-between items-center">
+        <button
+          onClick={handleFix}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-500/20"
+        >
+          <Shield className="h-3.5 w-3.5" />
+          Fix Database Security
+        </button>
         <button
           onClick={handleLock}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -170,59 +236,166 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
         }}
       />
 
-      <section>
-        <h2 className="mb-4 font-display text-lg font-bold">Manage apps</h2>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[0, 1].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
-            ))}
-          </div>
-        ) : !apps?.length ? (
-          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            No apps uploaded yet.
-          </p>
-        ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {apps.map((a) => (
-              <AppRow
-                key={a.id}
-                app={a}
-                onDeleted={() => {
-                  refetch();
-                  qc.invalidateQueries({ queryKey: ["apps"] });
-                }}
+      <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
+        <section>
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-display text-lg font-bold">Manage apps</h2>
+            <div className="relative w-full sm:max-w-[240px]">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search your apps..."
+                value={adminSearch}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card py-1.5 pl-9 pr-3 text-xs outline-none focus:border-primary transition"
               />
-            ))}
+            </div>
           </div>
-        )}
-      </section>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[0, 1].map((i) => (
+                <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
+              ))}
+            </div>
+          ) : !filteredApps.length ? (
+            <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+              {adminSearch ? "No matching apps found." : "No apps uploaded yet."}
+            </p>
+          ) : (
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {filteredApps.map((a: any) => (
+                <AppRow
+                  key={a.id}
+                  app={a}
+                  onChanged={() => {
+                    refetch();
+                    qc.invalidateQueries({ queryKey: ["apps"] });
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <History className="h-5 w-5 text-muted-foreground" />
+            <h2 className="font-display text-lg font-bold">Activity log</h2>
+          </div>
+          <div className="space-y-3 overflow-hidden rounded-2xl border border-border bg-card p-4">
+            {!history.length ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">No activity yet.</p>
+            ) : (
+              history.map((log: any) => (
+                <div key={log.id} className="border-l-2 border-primary/20 pl-3 py-0.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                    {log.action}
+                  </div>
+                  <p className="mt-0.5 text-xs font-medium">
+                    {log.performed_by} <span className="text-muted-foreground font-normal">
+                      {log.action === 'UPLOAD' ? 'uploaded' : log.action === 'EDIT' ? 'edited' : 'deleted'}
+                    </span> {log.app_name}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{formatDate(log.created_at)}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
 
 function AppRow({
   app,
-  onDeleted,
+  onChanged,
 }: {
-  app: Awaited<ReturnType<typeof listApps>>[number];
-  onDeleted: () => void;
+  app: any;
+  onChanged: () => void;
 }) {
   const del = useServerFn(deleteApp);
+  const update = useServerFn(updateApp);
   const [pending, setPending] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: app.name,
+    version: app.version,
+    category: app.category,
+    description: app.description,
+  });
 
   async function handleDelete() {
+    const adminName = localStorage.getItem("admin_name") || "Admin";
     if (!confirm(`Delete "${app.name}"? This removes the APK file too.`)) return;
     setPending(true);
     try {
-      await del({ data: { id: app.id } });
+      await del({ data: { id: app.id, adminName } });
       toast.success("App deleted successfully");
-      onDeleted();
+      onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete app");
     } finally {
       setPending(false);
     }
+  }
+
+  async function handleSave() {
+    const adminName = localStorage.getItem("admin_name") || "Admin";
+    setPending(true);
+    try {
+      await update({ data: { ...form, id: app.id, adminName } });
+      toast.success("App updated successfully");
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="p-4 space-y-3 bg-muted/30">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+            value={form.name}
+            onChange={e => setForm({...form, name: e.target.value})}
+            placeholder="App name"
+          />
+          <input
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+            value={form.version}
+            onChange={e => setForm({...form, version: e.target.value})}
+            placeholder="Version"
+          />
+        </div>
+        <textarea
+          className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm min-h-[60px]"
+          value={form.description}
+          onChange={e => setForm({...form, description: e.target.value})}
+          placeholder="Description"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setEditing(false)}
+            className="inline-flex h-8 items-center px-3 text-xs font-medium text-muted-foreground hover:bg-muted rounded-lg"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={pending}
+            className="inline-flex h-8 items-center gap-1.5 bg-primary px-3 text-xs font-medium text-primary-foreground rounded-lg"
+          >
+            {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            Save changes
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -238,19 +411,30 @@ function AppRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">{app.name}</div>
-        <div className="text-xs text-muted-foreground">
-          v{app.version} · {formatBytes(app.size_bytes)} · {app.download_count} downloads
+        <div className="flex items-center gap-2">
+          <div className="truncate text-sm font-semibold">{app.name}</div>
+          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">v{app.version}</span>
+        </div>
+        <div className="text-[10px] text-muted-foreground mt-0.5">
+          By {app.created_by || 'Unknown'} · Updated by {app.updated_by || 'Unknown'}
         </div>
       </div>
-      <button
-        onClick={handleDelete}
-        disabled={pending}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
-      >
-        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        Delete
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => setEditing(true)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={pending}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
+        >
+          {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          Delete
+        </button>
+      </div>
     </div>
   );
 }
@@ -299,6 +483,7 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    const adminName = typeof window !== 'undefined' ? localStorage.getItem("admin_name") || "Admin" : "Admin";
     if (!apk) {
       setError("Please choose an APK file.");
       return;
@@ -330,6 +515,7 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
           apk_path: urls.apk.path,
           apk_filename: apk.name,
           icon_path: urls.icon?.path ?? null,
+          adminName,
         },
       });
       setProgress(null);
@@ -351,18 +537,18 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
       className="rounded-2xl border border-border bg-card p-6 sm:p-8"
       style={{ boxShadow: "var(--shadow-card)" }}
     >
-      <h2 className="font-display text-lg font-bold">Upload a new app</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Choose the APK file, add details, and publish it to the store.
-      </p>
+      <div className="flex items-center gap-2 mb-6">
+        <Upload className="h-5 w-5 text-primary" />
+        <h2 className="font-display text-lg font-bold">Upload a new app</h2>
+      </div>
 
-      <form onSubmit={onSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
+      <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <Field label="App name" required>
           <input
             className="input"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="LEAD Classroom TV app"
+            placeholder="Classroom TV app"
           />
         </Field>
         <Field label="Category">
@@ -394,7 +580,7 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
             className="input min-h-[90px] resize-y"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Play resource seamlessly on TV from LEAD teacher tablet"
+            placeholder="Play resource seamlessly on TV from teacher tablet"
           />
         </Field>
         <Field label="APK file" required full>

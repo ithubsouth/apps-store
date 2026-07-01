@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Package, ArrowRight } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Download, Package, ArrowRight, Search } from "lucide-react";
 import { listApps } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes } from "@/components/site-header";
 
@@ -9,22 +10,47 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { data: apps, isLoading } = useQuery({
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data, isLoading } = useQuery({
     queryKey: ["apps"],
     queryFn: () => listApps(),
   });
+
+  const apps = data?.apps || [];
+
+  const filteredApps = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return apps;
+
+    return apps.filter(app =>
+      app.name.toLowerCase().includes(query) ||
+      app.category.toLowerCase().includes(query) ||
+      app.description.toLowerCase().includes(query)
+    );
+  }, [apps, searchQuery]);
 
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
       <main className="mx-auto max-w-6xl px-6 py-12">
-        <div className="mb-6 flex items-end justify-between">
+        <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-display text-2xl font-bold">All apps</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {apps?.length ?? 0} app{(apps?.length ?? 0) === 1 ? "" : "s"} available
+              {filteredApps.length} app{filteredApps.length === 1 ? "" : "s"} available
             </p>
+          </div>
+
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search apps by name, category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-2xl border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none ring-primary/20 transition focus:border-primary focus:ring-4"
+            />
           </div>
         </div>
 
@@ -34,11 +60,11 @@ function Home() {
               <div key={i} className="h-72 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
-        ) : !apps?.length ? (
-          <EmptyState />
+        ) : filteredApps.length === 0 ? (
+          <EmptyState isSearching={searchQuery.length > 0} />
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {apps.map((a) => (
+            {filteredApps.map((a) => (
               <AppCard key={a.id} app={a} />
             ))}
           </div>
@@ -46,13 +72,13 @@ function Home() {
       </main>
 
       <footer className="border-t border-border/60 py-8 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} LEAD Group · Internal use only
+        © {new Date().getFullYear()} · App Store
       </footer>
     </div>
   );
 }
 
-function AppCard({ app }: { app: Awaited<ReturnType<typeof listApps>>[number] }) {
+function AppCard({ app }: { app: any }) {
   return (
     <Link
       to="/app/$id"
@@ -96,7 +122,7 @@ function AppCard({ app }: { app: Awaited<ReturnType<typeof listApps>>[number] })
   );
 }
 
-function EmptyState() {
+function EmptyState({ isSearching }: { isSearching?: boolean }) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-20 text-center">
       <div
@@ -105,9 +131,13 @@ function EmptyState() {
       >
         <Download className="h-6 w-6" />
       </div>
-      <h3 className="mt-4 font-display text-lg font-bold">No apps yet</h3>
+      <h3 className="mt-4 font-display text-lg font-bold">
+        {isSearching ? "No apps found" : "No apps yet"}
+      </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Once an admin uploads apps, they'll appear here.
+        {isSearching
+          ? "Try adjusting your search terms to find what you're looking for."
+          : "Once an admin uploads apps, they'll appear here."}
       </p>
     </div>
   );

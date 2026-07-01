@@ -24,21 +24,10 @@ export function SiteHeader() {
             <Package className="h-5 w-5" strokeWidth={2.5} />
           </span>
           <div className="leading-tight">
-            <div className="font-display text-sm font-bold tracking-tight">LEAD App Store</div>
-            <div className="text-[11px] font-medium text-muted-foreground">
-              Internal distribution
-            </div>
+            <div className="font-display text-sm font-bold tracking-tight">App Store</div>
           </div>
         </Link>
-        {data?.isAdmin && !isAdminPage && (
-          <Link
-            to="/admin"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            <Shield className="h-3.5 w-3.5" />
-            Admin
-          </Link>
-        )}
+        {/* Admin button is hidden from public users. Admins can access via /admin */}
       </div>
     </header>
   );

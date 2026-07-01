@@ -5,8 +5,8 @@ type GateSession = { unlocked?: boolean };
 
 export function getSessionConfig() {
   return {
-    password: process.env.SESSION_SECRET || "a-very-long-and-secure-fallback-secret-for-lead-app-store",
-    name: "lead-app-store-admin",
+    password: process.env.SESSION_SECRET || "a-very-long-and-secure-fallback-secret-for-app-store",
+    name: "app-store-admin",
     maxAge: 60 * 60 * 8,
     cookie: {
       httpOnly: true,
