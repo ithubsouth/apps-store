@@ -84,6 +84,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Browse and download internal LEAD apps." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "LEAD Internal App Store" },
+      { name: "twitter:description", content: "Browse and download internal LEAD apps." },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
