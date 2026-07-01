@@ -15,6 +15,7 @@ import {
   listApps,
 } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes } from "@/components/site-header";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin-x9k2")({
   component: AdminPage,
