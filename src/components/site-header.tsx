@@ -1,7 +1,18 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useMatch } from "@tanstack/react-router";
 import { Package, Shield } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getAdminStatus } from "@/lib/gate.functions";
 
 export function SiteHeader() {
+  const status = useServerFn(getAdminStatus);
+  const { data } = useQuery({
+    queryKey: ["admin-status"],
+    queryFn: () => status(),
+  });
+
+  const isAdminPage = useMatch({ from: "/admin", shouldThrow: false });
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-lg">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -19,13 +30,15 @@ export function SiteHeader() {
             </div>
           </div>
         </Link>
-        <a
-          href="/admin-x9k2"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-        >
-          <Shield className="h-3.5 w-3.5" />
-          Admin
-        </a>
+        {data?.isAdmin && !isAdminPage && (
+          <Link
+            to="/admin"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            <Shield className="h-3.5 w-3.5" />
+            Admin
+          </Link>
+        )}
       </div>
     </header>
   );

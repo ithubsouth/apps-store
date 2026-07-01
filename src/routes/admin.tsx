@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
-import { Loader2, LogOut, Lock, Shield, Trash2, Upload } from "lucide-react";
+import { Loader2, LogOut, Lock, Shield, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 import {
   getAdminStatus,
   lockAdmin,
@@ -17,7 +18,10 @@ import {
 import { SiteHeader, formatBytes } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/admin-x9k2")({
+export const Route = createFileRoute("/admin")({
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex, nofollow" }],
+  }),
   component: AdminPage,
 });
 
@@ -62,6 +66,7 @@ function AdminPage() {
 function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
   const unlock = useServerFn(unlockAdmin);
   const [pwd, setPwd] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -69,10 +74,21 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
     e.preventDefault();
     setPending(true);
     setError(false);
-    const { ok } = await unlock({ data: { passcode: pwd } });
-    setPending(false);
-    if (ok) onUnlocked();
-    else setError(true);
+    try {
+      const { ok } = await unlock({ data: { passcode: pwd } });
+      if (ok) {
+        toast.success("Admin access granted");
+        onUnlocked();
+      } else {
+        setError(true);
+        toast.error("Invalid passcode");
+      }
+    } catch (err) {
+      console.error("Unlock error:", err);
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -89,14 +105,23 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
         This page is restricted to LEAD admins.
       </p>
       <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <input
-          type="password"
-          value={pwd}
-          onChange={(e) => setPwd(e.target.value)}
-          autoFocus
-          placeholder="Passcode"
-          className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2"
-        />
+        <div className="relative">
+          <input
+            type={showPwd ? "text" : "password"}
+            value={pwd}
+            onChange={(e) => setPwd(e.target.value)}
+            autoFocus
+            placeholder="Passcode"
+            className="w-full rounded-xl border border-input bg-background pl-4 pr-11 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPwd(!showPwd)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
         {error && <p className="text-xs text-destructive">Incorrect passcode.</p>}
         <button
           type="submit"
@@ -114,13 +139,15 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
 function AdminPanel({ onLock }: { onLock: () => void }) {
   const lock = useServerFn(lockAdmin);
   const qc = useQueryClient();
-  const { data: apps, refetch } = useQuery({
+  const { data: apps, refetch, isLoading } = useQuery({
     queryKey: ["apps"],
     queryFn: () => listApps(),
   });
 
   async function handleLock() {
     await lock();
+    qc.clear();
+    toast.success("Logged out successfully");
     onLock();
   }
 
@@ -145,7 +172,13 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
 
       <section>
         <h2 className="mb-4 font-display text-lg font-bold">Manage apps</h2>
-        {!apps?.length ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
+            ))}
+          </div>
+        ) : !apps?.length ? (
           <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
             No apps uploaded yet.
           </p>
@@ -183,7 +216,10 @@ function AppRow({
     setPending(true);
     try {
       await del({ data: { id: app.id } });
+      toast.success("App deleted successfully");
       onDeleted();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete app");
     } finally {
       setPending(false);
     }
@@ -246,6 +282,14 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
     token: string,
     file: File,
   ) {
+    if (token === "public") {
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) throw new Error(error.message);
+      return;
+    }
+
     const { error } = await supabase.storage
       .from(bucket)
       .uploadToSignedUrl(path, token, file, { contentType: file.type || undefined });
@@ -290,9 +334,12 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
       });
       setProgress(null);
       reset();
+      toast.success("App published successfully!");
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      const msg = err instanceof Error ? err.message : "Upload failed.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setPending(false);
       setProgress(null);

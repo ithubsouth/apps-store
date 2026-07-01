@@ -18,26 +18,6 @@ function Home() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      <section
-        className="border-b border-border/60"
-        style={{ background: "var(--gradient-hero)" }}
-      >
-        <div className="mx-auto max-w-6xl px-6 py-16 text-primary-foreground sm:py-20">
-          <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
-            Internal · LEAD Group
-          </span>
-          <h1 className="mt-4 max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">
-            The LEAD app catalog.
-            <br />
-            <span className="text-white/70">One place for every internal app.</span>
-          </h1>
-          <p className="mt-4 max-w-xl text-base text-white/80">
-            Browse, download and install the latest versions of LEAD's classroom and teacher
-            apps — no sign in required.
-          </p>
-        </div>
-      </section>
-
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-6 flex items-end justify-between">
           <div>

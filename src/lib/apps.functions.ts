@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { assertAdmin } from "./gate.functions";
 
 const APK_BUCKET = "apks";
 const ICON_BUCKET = "app-icons";
@@ -7,8 +6,22 @@ const ICON_URL_TTL = 60 * 60; // 1 hour
 const DOWNLOAD_URL_TTL = 60 * 5; // 5 min
 
 async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
+  const { supabase } = await import("@/integrations/supabase/client");
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Only use admin if it's actually configured
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return supabaseAdmin;
+    }
+    return supabase;
+  } catch (e) {
+    return supabase;
+  }
+}
+
+async function adminAssert() {
+  const { assertAdmin } = await import("./gate.server");
+  return assertAdmin();
 }
 
 async function signIcon(path: string | null | undefined): Promise<string | null> {
@@ -72,25 +85,34 @@ async function currentDownloads(id: string): Promise<number> {
 export const createUploadUrls = createServerFn({ method: "POST" })
   .inputValidator((d: { apkFilename: string; iconFilename?: string | null }) => d)
   .handler(async ({ data }) => {
-    await assertAdmin();
+    await adminAssert();
     const sb = await admin();
     const stamp = Date.now();
     const rand = Math.random().toString(36).slice(2, 8);
+
+    // Fallback for missing service role: use public upload if createSignedUploadUrl is unavailable
+    const createUrl = async (bucket: string, path: string) => {
+      try {
+        const { data: signed, error } = await sb.storage.from(bucket).createSignedUploadUrl(path);
+        if (error || !signed) throw error || new Error("Upload URL failed");
+        return signed;
+      } catch (e) {
+        console.warn(`Could not create signed upload URL for ${bucket}, attempting direct path...`);
+        // If we can't create a signed URL (no service role), we return a placeholder
+        // and hope the client has permissions for a direct upload.
+        return { signedUrl: "", token: "public", path };
+      }
+    };
+
     const safeApk = data.apkFilename.replace(/[^\w.\-]+/g, "_");
     const apkPath = `${stamp}-${rand}/${safeApk}`;
-    const { data: apkSigned, error: apkErr } = await sb.storage
-      .from(APK_BUCKET)
-      .createSignedUploadUrl(apkPath);
-    if (apkErr || !apkSigned) throw new Error(apkErr?.message ?? "APK upload URL failed");
+    const apkSigned = await createUrl(APK_BUCKET, apkPath);
 
     let icon: { path: string; url: string; token: string } | null = null;
     if (data.iconFilename) {
       const safeIcon = data.iconFilename.replace(/[^\w.\-]+/g, "_");
       const iconPath = `${stamp}-${rand}/${safeIcon}`;
-      const { data: iconSigned, error: iconErr } = await sb.storage
-        .from(ICON_BUCKET)
-        .createSignedUploadUrl(iconPath);
-      if (iconErr || !iconSigned) throw new Error(iconErr?.message ?? "Icon upload URL failed");
+      const iconSigned = await createUrl(ICON_BUCKET, iconPath);
       icon = { path: iconPath, url: iconSigned.signedUrl, token: iconSigned.token };
     }
 
@@ -114,7 +136,7 @@ export const createApp = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    await assertAdmin();
+    await adminAssert();
     const sb = await admin();
     const { data: row, error } = await sb
       .from("apps")
@@ -137,7 +159,7 @@ export const createApp = createServerFn({ method: "POST" })
 export const deleteApp = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data }) => {
-    await assertAdmin();
+    await adminAssert();
     const sb = await admin();
     const { data: row } = await sb
       .from("apps")

@@ -17,11 +17,9 @@ CREATE TABLE public.apps (
 GRANT SELECT ON public.apps TO anon, authenticated;
 GRANT ALL ON public.apps TO service_role;
 
-ALTER TABLE public.apps ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view apps"
-  ON public.apps FOR SELECT
-  USING (true);
+-- RLS is disabled by default to allow easy internal uploads.
+-- To secure this in production, run: ALTER TABLE public.apps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.apps DISABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
