@@ -171,6 +171,7 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
   const fix = useServerFn(fixDatabaseSecurity);
   const qc = useQueryClient();
   const [adminSearch, setAdminSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(10);
   const { data, refetch, isLoading } = useQuery({
     queryKey: ["apps-admin"],
     queryFn: () => listApps(),
@@ -188,6 +189,10 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
       (app.created_by || "").toLowerCase().includes(query)
     );
   }, [apps, adminSearch]);
+
+  const displayedApps = useMemo(() => {
+    return filteredApps.slice(0, visibleCount);
+  }, [filteredApps, visibleCount]);
 
   async function handleLock() {
     await lock();
@@ -236,7 +241,7 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
         }}
       />
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
         <section>
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-display text-lg font-bold">Manage apps</h2>
@@ -262,17 +267,30 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
               {adminSearch ? "No matching apps found." : "No apps uploaded yet."}
             </p>
           ) : (
-            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-              {filteredApps.map((a: any) => (
-                <AppRow
-                  key={a.id}
-                  app={a}
-                  onChanged={() => {
-                    refetch();
-                    qc.invalidateQueries({ queryKey: ["apps"] });
-                  }}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                {displayedApps.map((a: any) => (
+                  <AppRow
+                    key={a.id}
+                    app={a}
+                    onChanged={() => {
+                      refetch();
+                      qc.invalidateQueries({ queryKey: ["apps"] });
+                    }}
+                  />
+                ))}
+              </div>
+
+              {visibleCount < filteredApps.length && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + 10)}
+                    className="text-xs font-semibold text-muted-foreground hover:text-primary transition"
+                  >
+                    Show more apps...
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -282,27 +300,34 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
             <History className="h-5 w-5 text-muted-foreground" />
             <h2 className="font-display text-lg font-bold">Activity log</h2>
           </div>
-          <div className="space-y-3 overflow-hidden rounded-2xl border border-border bg-card p-4">
+          <div className="max-h-[600px] overflow-y-auto space-y-3 rounded-2xl border border-border bg-card p-4 custom-scrollbar shadow-sm">
             {!history.length ? (
               <p className="py-4 text-center text-xs text-muted-foreground">No activity yet.</p>
             ) : (
               history.map((log: any) => (
                 <div key={log.id} className="border-l-2 border-primary/20 pl-3 py-0.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                     {log.action}
                   </div>
-                  <p className="mt-0.5 text-xs font-medium">
+                  <p className="mt-0.5 text-[11px] font-medium leading-tight">
                     {log.performed_by} <span className="text-muted-foreground font-normal">
                       {log.action === 'UPLOAD' ? 'uploaded' : log.action === 'EDIT' ? 'edited' : 'deleted'}
                     </span> {log.app_name}
                   </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{formatDate(log.created_at)}</p>
+                  <p className="mt-1 text-[9px] text-muted-foreground">{formatDate(log.created_at)}</p>
                 </div>
               ))
             )}
           </div>
         </section>
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+      `}</style>
     </div>
   );
 }

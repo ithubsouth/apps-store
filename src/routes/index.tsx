@@ -17,6 +17,7 @@ function Home() {
   });
 
   const apps = data?.apps || [];
+  const [visibleCount, setVisibleCount] = useState(12);
 
   const filteredApps = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -29,11 +30,15 @@ function Home() {
     );
   }, [apps, searchQuery]);
 
+  const displayedApps = useMemo(() => {
+    return filteredApps.slice(0, visibleCount);
+  }, [filteredApps, visibleCount]);
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      <main className="mx-auto max-w-6xl px-6 py-12">
+      <main className="mx-auto max-w-7xl px-6 py-12">
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-display text-2xl font-bold">All apps</h2>
@@ -55,19 +60,32 @@ function Home() {
         </div>
 
         {isLoading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-72 animate-pulse rounded-2xl bg-muted" />
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-56 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
         ) : filteredApps.length === 0 ? (
           <EmptyState isSearching={searchQuery.length > 0} />
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredApps.map((a) => (
-              <AppCard key={a.id} app={a} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+              {displayedApps.map((a) => (
+                <AppCard key={a.id} app={a} />
+              ))}
+            </div>
+
+            {visibleCount < filteredApps.length && (
+              <div className="mt-12 flex justify-center">
+                <button
+                  onClick={() => setVisibleCount(prev => prev + 12)}
+                  className="rounded-full border border-border bg-card px-8 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted"
+                >
+                  Load more apps
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
@@ -83,11 +101,11 @@ function AppCard({ app }: { app: any }) {
     <Link
       to="/app/$id"
       params={{ id: app.id }}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:-translate-y-0.5"
       style={{ boxShadow: "var(--shadow-card)" }}
     >
       <div
-        className="relative flex aspect-[16/10] items-center justify-center overflow-hidden"
+        className="relative flex aspect-square items-center justify-center overflow-hidden"
         style={{ background: "var(--gradient-hero)" }}
       >
         {app.icon_url ? (
@@ -97,25 +115,22 @@ function AppCard({ app }: { app: any }) {
             className="h-full w-full object-cover"
           />
         ) : (
-          <Package className="h-16 w-16 text-white/80" strokeWidth={1.5} />
+          <Package className="h-10 w-10 text-white/80" strokeWidth={1.5} />
         )}
-        <span className="absolute left-3 top-3 rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur">
+        <span className="absolute left-2 top-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
           {app.category}
         </span>
       </div>
-      <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-lg font-bold text-foreground">{app.name}</h3>
-        <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{app.description}</p>
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs">
-          <div className="flex gap-4 text-muted-foreground">
-            <span>
-              <span className="font-medium text-foreground">v{app.version}</span>
-            </span>
+      <div className="flex flex-1 flex-col p-3.5">
+        <h3 className="truncate font-display text-sm font-bold text-foreground" title={app.name}>
+          {app.name}
+        </h3>
+        <div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2.5 text-[10px]">
+          <div className="flex gap-2.5 text-muted-foreground">
+            <span className="font-semibold text-foreground">v{app.version}</span>
             <span>{formatBytes(app.size_bytes)}</span>
           </div>
-          <span className="inline-flex items-center gap-1 text-primary transition group-hover:gap-2">
-            View <ArrowRight className="h-3.5 w-3.5" />
-          </span>
+          <ArrowRight className="h-3 w-3 text-primary transition group-hover:translate-x-0.5" />
         </div>
       </div>
     </Link>
