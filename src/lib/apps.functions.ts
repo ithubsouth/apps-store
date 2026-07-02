@@ -184,21 +184,36 @@ export const updateApp = createServerFn({ method: "POST" })
       description: string;
       version: string;
       adminName: string;
+      apk_path?: string;
+      apk_filename?: string;
+      icon_path?: string | null;
+      size_bytes?: number;
     }) => d,
   )
   .handler(async ({ data }) => {
     await adminAssert();
     const sb = await admin();
+    const updateData: any = {
+      name: data.name.trim(),
+      category: data.category.trim(),
+      description: data.description.trim(),
+      version: data.version.trim(),
+      updated_by: data.adminName,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.apk_path) {
+      updateData.apk_path = data.apk_path;
+      updateData.apk_filename = data.apk_filename;
+      updateData.size_bytes = data.size_bytes;
+    }
+    if (data.icon_path !== undefined) {
+      updateData.icon_path = data.icon_path;
+    }
+
     const { data: row, error } = await sb
       .from("apps")
-      .update({
-        name: data.name.trim(),
-        category: data.category.trim(),
-        description: data.description.trim(),
-        version: data.version.trim(),
-        updated_by: data.adminName,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", data.id)
       .select("*")
       .single();

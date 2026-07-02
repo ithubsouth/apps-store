@@ -316,14 +316,38 @@ function AppRow({
 }) {
   const del = useServerFn(deleteApp);
   const update = useServerFn(updateApp);
+  const getUrls = useServerFn(createUploadUrls);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: app.name,
     version: app.version,
     category: app.category,
     description: app.description,
   });
+  const [newApk, setNewApk] = useState<File | null>(null);
+  const [newIcon, setNewIcon] = useState<File | null>(null);
+
+  async function uploadWithSignedUrl(
+    bucket: string,
+    path: string,
+    token: string,
+    file: File,
+  ) {
+    if (token === "public") {
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) throw new Error(error.message);
+      return;
+    }
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .uploadToSignedUrl(path, token, file, { contentType: file.type || undefined });
+    if (error) throw new Error(error.message);
+  }
 
   async function handleDelete() {
     const adminName = localStorage.getItem("admin_name") || "Admin";
@@ -344,43 +368,124 @@ function AppRow({
     const adminName = localStorage.getItem("admin_name") || "Admin";
     setPending(true);
     try {
-      await update({ data: { ...form, id: app.id, adminName } });
+      let apkUpdate = {};
+      let iconUpdate = {};
+
+      if (newApk || newIcon) {
+        setProgress("Requesting upload URL...");
+        const urls = await getUrls({
+          data: {
+            apkFilename: newApk?.name || "placeholder.apk",
+            iconFilename: newIcon?.name ?? null
+          },
+        });
+
+        if (newApk) {
+          setProgress("Uploading new APK...");
+          await uploadWithSignedUrl("apks", urls.apk.path, urls.apk.token, newApk);
+          apkUpdate = {
+            apk_path: urls.apk.path,
+            apk_filename: newApk.name,
+            size_bytes: newApk.size,
+          };
+        }
+
+        if (newIcon && urls.icon) {
+          setProgress("Uploading new icon...");
+          await uploadWithSignedUrl("app-icons", urls.icon.path, urls.icon.token, newIcon);
+          iconUpdate = { icon_path: urls.icon.path };
+        }
+      }
+
+      setProgress("Updating app details...");
+      await update({
+        data: {
+          ...form,
+          ...apkUpdate,
+          ...iconUpdate,
+          id: app.id,
+          adminName
+        }
+      });
+
       toast.success("App updated successfully");
       setEditing(false);
+      setNewApk(null);
+      setNewIcon(null);
       onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Update failed");
     } finally {
       setPending(false);
+      setProgress(null);
     }
   }
 
   if (editing) {
     return (
-      <div className="p-4 space-y-3 bg-muted/30">
+      <div className="p-4 space-y-4 bg-muted/30">
         <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-            value={form.name}
-            onChange={e => setForm({...form, name: e.target.value})}
-            placeholder="App name"
-          />
-          <input
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-            value={form.version}
-            onChange={e => setForm({...form, version: e.target.value})}
-            placeholder="Version"
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">App Name</label>
+            <input
+              className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+              value={form.name}
+              onChange={e => setForm({...form, name: e.target.value})}
+              placeholder="App name"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">Version</label>
+            <input
+              className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+              value={form.version}
+              onChange={e => setForm({...form, version: e.target.value})}
+              placeholder="Version"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Description</label>
+          <textarea
+            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm min-h-[60px]"
+            value={form.description}
+            onChange={e => setForm({...form, description: e.target.value})}
+            placeholder="Description"
           />
         </div>
-        <textarea
-          className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm min-h-[60px]"
-          value={form.description}
-          onChange={e => setForm({...form, description: e.target.value})}
-          placeholder="Description"
-        />
-        <div className="flex justify-end gap-2">
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">New APK (Optional)</label>
+            <input
+              type="file"
+              accept=".apk"
+              onChange={e => setNewApk(e.target.files?.[0] || null)}
+              className="w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">New Icon (Optional)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => setNewIcon(e.target.files?.[0] || null)}
+              className="w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+            />
+          </div>
+        </div>
+
+        {progress && (
+          <div className="text-[10px] text-primary animate-pulse font-medium">
+            {progress}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
           <button
             onClick={() => setEditing(false)}
+            disabled={pending}
             className="inline-flex h-8 items-center px-3 text-xs font-medium text-muted-foreground hover:bg-muted rounded-lg"
           >
             Cancel
@@ -388,7 +493,7 @@ function AppRow({
           <button
             onClick={handleSave}
             disabled={pending}
-            className="inline-flex h-8 items-center gap-1.5 bg-primary px-3 text-xs font-medium text-primary-foreground rounded-lg"
+            className="inline-flex h-8 items-center gap-1.5 bg-primary px-3 text-xs font-medium text-primary-foreground rounded-lg shadow-sm"
           >
             {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             Save changes
