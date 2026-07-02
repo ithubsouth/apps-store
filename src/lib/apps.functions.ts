@@ -203,8 +203,15 @@ export const updateApp = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+    await sb.from("audit_logs").insert({
+      app_id: row.id,
+      app_name: row.name,
+      action: "EDIT",
+      performed_by: data.adminName,
+    });
     return row;
   });
+
 
 export const deleteApp = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string; adminName: string }) => d)
