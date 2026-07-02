@@ -60,7 +60,8 @@ CREATE POLICY "Public Insert" ON storage.objects FOR INSERT WITH CHECK (bucket_i
 CREATE POLICY "Public Update" ON storage.objects FOR UPDATE USING (bucket_id IN ('app-icons', 'apks'));
 CREATE POLICY "Public Delete" ON storage.objects FOR DELETE USING (bucket_id IN ('app-icons', 'apks'));
 
--- 3. Table Permissions
+-- 3. Table Permissions & Schema
+ALTER TABLE public.apps ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 ALTER TABLE public.apps DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.apps TO anon, authenticated, service_role;
 ALTER TABLE public.audit_logs DISABLE ROW LEVEL SECURITY;

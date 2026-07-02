@@ -33,25 +33,44 @@ async function signIcon(path: string | null | undefined): Promise<string | null>
 
 export const listApps = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await sb
-    .from("apps")
-    .select("*")
-    .order("updated_at", { ascending: false });
-  if (error) throw new Error(error.message);
 
-  // Also get audit logs for history
+  // Try with sort_order first, fallback to standard sort if it fails (e.g. column not added yet)
+  let query = sb.from("apps").select("*");
+
+  try {
+    const { data, error } = await query
+      .order("sort_order", { ascending: true })
+      .order("updated_at", { ascending: false });
+
+    if (error && error.message.includes('column "sort_order" does not exist')) {
+      console.warn("sort_order column missing, falling back to updated_at sort");
+      const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
+      if (fallback.error) throw new Error(fallback.error.message);
+      return processResults(fallback.data, sb);
+    }
+
+    if (error) throw new Error(error.message);
+    return processResults(data, sb);
+  } catch (e) {
+    const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
+    if (fallback.error) throw new Error(fallback.error.message);
+    return processResults(fallback.data, sb);
+  }
+});
+
+async function processResults(data: any[] | null, sb: any) {
+  // Get audit logs
   const { data: logs } = await sb
     .from("audit_logs")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(50);
 
-
   const rows = await Promise.all(
     (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
   );
   return { apps: rows, history: logs ?? [] };
-});
+}
 
 export const getApp = createServerFn({ method: "GET" })
   .inputValidator((d: { id: string }) => d)
@@ -161,6 +180,7 @@ export const createApp = createServerFn({ method: "POST" })
         icon_path: data.icon_path ?? null,
         created_by: data.adminName,
         updated_by: data.adminName,
+        sort_order: 0, // Default to top
       })
       .select("*")
       .single();
@@ -227,6 +247,23 @@ export const updateApp = createServerFn({ method: "POST" })
     return row;
   });
 
+export const reorderApps = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; sort_order: number }[]) => d)
+  .handler(async ({ data }) => {
+    await adminAssert();
+    const sb = await admin();
+
+    // Perform multiple updates in a transaction-like way
+    for (const item of data) {
+      const { error } = await sb
+        .from("apps")
+        .update({ sort_order: item.sort_order })
+        .eq("id", item.id);
+      if (error) console.error(`Failed to update sort_order for ${item.id}`, error);
+    }
+
+    return { ok: true };
+  });
 
 export const deleteApp = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string; adminName: string }) => d)

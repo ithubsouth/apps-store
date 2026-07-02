@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent, useMemo } from "react";
-import { Loader2, LogOut, Lock, Shield, Trash2, Upload, Eye, EyeOff, History, Edit2, Check, X, Search } from "lucide-react";
+import { Loader2, LogOut, Lock, Shield, Trash2, Upload, Eye, EyeOff, History, Edit2, Check, X, Search, ListFilter } from "lucide-react";
 import { toast } from "sonner";
 import {
   getAdminStatus,
@@ -16,9 +16,11 @@ import {
   createUploadUrls,
   deleteApp,
   listApps,
+  reorderApps,
 } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
+import { ArrowUp, ArrowDown } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -171,28 +173,86 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
   const fix = useServerFn(fixDatabaseSecurity);
   const qc = useQueryClient();
   const [adminSearch, setAdminSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [visibleCount, setVisibleCount] = useState(10);
+  const [historyCount, setHistoryCount] = useState(15);
   const { data, refetch, isLoading } = useQuery({
     queryKey: ["apps-admin"],
     queryFn: () => listApps(),
   });
 
+  const reorder = useServerFn(reorderApps);
+
   const apps = data?.apps || [];
   const history = data?.history || [];
 
+  async function handleMove(id: string, dir: "up" | "down") {
+    const idx = apps.findIndex((a: any) => a.id === id);
+    if (idx === -1) return;
+
+    const newApps = [...apps];
+    const targetIdx = dir === "up" ? idx - 1 : idx + 1;
+
+    if (targetIdx < 0 || targetIdx >= newApps.length) return;
+
+    // Swap
+    [newApps[idx], newApps[targetIdx]] = [newApps[targetIdx], newApps[idx]];
+
+    // Prepare data for server (update all sort_orders to match new array index)
+    const updates = newApps.map((a, i) => ({ id: a.id, sort_order: i }));
+
+    try {
+      await reorder({ data: updates });
+      refetch();
+      qc.invalidateQueries({ queryKey: ["apps"] });
+    } catch (err) {
+      toast.error("Failed to reorder apps");
+    }
+  }
+
   const filteredApps = useMemo(() => {
+    let result = [...apps];
     const query = adminSearch.toLowerCase().trim();
-    if (!query) return apps;
-    return apps.filter((app: any) =>
-      app.name.toLowerCase().includes(query) ||
-      app.version.toLowerCase().includes(query) ||
-      (app.created_by || "").toLowerCase().includes(query)
+
+    if (query) {
+      result = result.filter((app: any) =>
+        app.name.toLowerCase().includes(query) ||
+        app.version.toLowerCase().includes(query) ||
+        (app.created_by || "").toLowerCase().includes(query)
+      );
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === "newest") return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      if (sortBy === "oldest") return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
+      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+      if (sortBy === "size-desc") return (b.size_bytes || 0) - (a.size_bytes || 0);
+      if (sortBy === "size-asc") return (a.size_bytes || 0) - (b.size_bytes || 0);
+      return 0;
+    });
+
+    return result;
+  }, [apps, adminSearch, sortBy]);
+
+  const filteredHistory = useMemo(() => {
+    const query = adminSearch.toLowerCase().trim();
+    if (!query) return history;
+    return history.filter((log: any) =>
+      log.app_name.toLowerCase().includes(query) ||
+      log.performed_by.toLowerCase().includes(query) ||
+      log.action.toLowerCase().includes(query)
     );
-  }, [apps, adminSearch]);
+  }, [history, adminSearch]);
 
   const displayedApps = useMemo(() => {
     return filteredApps.slice(0, visibleCount);
   }, [filteredApps, visibleCount]);
+
+  const displayedHistory = useMemo(() => {
+    return filteredHistory.slice(0, historyCount);
+  }, [filteredHistory, historyCount]);
 
   async function handleLock() {
     await lock();
@@ -241,19 +301,36 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
         }}
       />
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <section>
-          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid gap-8 lg:grid-cols-[1fr_320px] items-start">
+        <section className="min-h-[500px] flex flex-col">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-display text-lg font-bold">Manage apps</h2>
-            <div className="relative w-full sm:max-w-[240px]">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search your apps..."
-                value={adminSearch}
-                onChange={(e) => setAdminSearch(e.target.value)}
-                className="w-full rounded-xl border border-border bg-card py-1.5 pl-9 pr-3 text-xs outline-none focus:border-primary transition"
-              />
+            <div className="flex flex-1 items-center gap-3 sm:max-w-[400px]">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={adminSearch}
+                  onChange={(e) => setAdminSearch(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-card py-1.5 pl-9 pr-3 text-xs outline-none focus:border-primary transition"
+                />
+              </div>
+              <div className="relative flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1">
+                <ListFilter className="h-3 w-3 text-muted-foreground" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-transparent py-0.5 pr-1 text-[10px] font-bold outline-none cursor-pointer"
+                >
+                  <option value="newest">Latest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="name-asc">A-Z</option>
+                  <option value="name-desc">Z-A</option>
+                  <option value="size-desc">Size ↓</option>
+                  <option value="size-asc">Size ↑</option>
+                </select>
+              </div>
             </div>
           </div>
           {isLoading ? (
@@ -269,10 +346,13 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
           ) : (
             <div className="space-y-4">
               <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                {displayedApps.map((a: any) => (
+                {displayedApps.map((a: any, index: number) => (
                   <AppRow
                     key={a.id}
                     app={a}
+                    isFirst={index === 0 && adminSearch === ""}
+                    isLast={index === apps.length - 1 && adminSearch === ""}
+                    onMove={(dir) => handleMove(a.id, dir)}
                     onChanged={() => {
                       refetch();
                       qc.invalidateQueries({ queryKey: ["apps"] });
@@ -295,16 +375,18 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
           )}
         </section>
 
-        <section>
+        <section className="min-h-[500px] flex flex-col">
           <div className="mb-4 flex items-center gap-2">
             <History className="h-5 w-5 text-muted-foreground" />
             <h2 className="font-display text-lg font-bold">Activity log</h2>
           </div>
-          <div className="max-h-[600px] overflow-y-auto space-y-3 rounded-2xl border border-border bg-card p-4 custom-scrollbar shadow-sm">
-            {!history.length ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">No activity yet.</p>
+          <div className="flex-grow max-h-[600px] overflow-y-auto space-y-3 rounded-2xl border border-border bg-card p-4 custom-scrollbar shadow-sm">
+            {!displayedHistory.length ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                {adminSearch ? "No matching activity." : "No activity yet."}
+              </p>
             ) : (
-              history.map((log: any) => (
+              displayedHistory.map((log: any) => (
                 <div key={log.id} className="border-l-2 border-primary/20 pl-3 py-0.5">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                     {log.action}
@@ -317,6 +399,17 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
                   <p className="mt-1 text-[9px] text-muted-foreground">{formatDate(log.created_at)}</p>
                 </div>
               ))
+            )}
+
+            {historyCount < filteredHistory.length && (
+              <div className="pt-2 flex justify-center border-t border-border/40 mt-2">
+                <button
+                  onClick={() => setHistoryCount(prev => prev + 15)}
+                  className="text-[10px] font-bold uppercase tracking-tight text-muted-foreground hover:text-primary transition"
+                >
+                  Load more history
+                </button>
+              </div>
             )}
           </div>
         </section>
@@ -335,9 +428,15 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
 function AppRow({
   app,
   onChanged,
+  onMove,
+  isFirst,
+  isLast,
 }: {
   app: any;
   onChanged: () => void;
+  onMove?: (dir: "up" | "down") => void;
+  isFirst?: boolean;
+  isLast?: boolean;
 }) {
   const del = useServerFn(deleteApp);
   const update = useServerFn(updateApp);
@@ -559,6 +658,24 @@ function AppRow({
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-1 mr-2">
+          <button
+            onClick={() => onMove?.("up")}
+            disabled={isFirst}
+            className="p-1 rounded hover:bg-muted disabled:opacity-20"
+            title="Move Up"
+          >
+            <ArrowUp className="h-3 w-3" />
+          </button>
+          <button
+            onClick={() => onMove?.("down")}
+            disabled={isLast}
+            className="p-1 rounded hover:bg-muted disabled:opacity-20"
+            title="Move Down"
+          >
+            <ArrowDown className="h-3 w-3" />
+          </button>
+        </div>
         <button
           onClick={() => setEditing(true)}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted"

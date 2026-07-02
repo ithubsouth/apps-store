@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Download, Package, ArrowRight, Search } from "lucide-react";
+import { Download, Package, ArrowRight, Search, ListFilter } from "lucide-react";
 import { listApps } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes } from "@/components/site-header";
 
@@ -9,8 +9,11 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
+type SortOption = "manual" | "newest" | "oldest" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
+
 function Home() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("manual");
   const { data, isLoading } = useQuery({
     queryKey: ["apps"],
     queryFn: () => listApps(),
@@ -20,15 +23,41 @@ function Home() {
   const [visibleCount, setVisibleCount] = useState(12);
 
   const filteredApps = useMemo(() => {
+    let result = [...apps];
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return apps;
 
-    return apps.filter(app =>
-      app.name.toLowerCase().includes(query) ||
-      app.category.toLowerCase().includes(query) ||
-      app.description.toLowerCase().includes(query)
-    );
-  }, [apps, searchQuery]);
+    if (query) {
+      result = result.filter(app =>
+        app.name.toLowerCase().includes(query) ||
+        app.category.toLowerCase().includes(query) ||
+        app.description.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply Sorting
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "manual":
+          return (a.sort_order || 0) - (b.sort_order || 0);
+        case "newest":
+          return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+        case "oldest":
+          return new Date(a.updated_at || a.created_at).getTime() - new Date(b.updated_at || b.created_at).getTime();
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "size-asc":
+          return (a.size_bytes || 0) - (b.size_bytes || 0);
+        case "size-desc":
+          return (b.size_bytes || 0) - (a.size_bytes || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [apps, searchQuery, sortBy]);
 
   const displayedApps = useMemo(() => {
     return filteredApps.slice(0, visibleCount);
@@ -47,15 +76,34 @@ function Home() {
             </p>
           </div>
 
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search apps by name, category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-2xl border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none ring-primary/20 transition focus:border-primary focus:ring-4"
-            />
+          <div className="flex w-full max-w-2xl flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search apps by name, category..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-2xl border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none ring-primary/20 transition focus:border-primary focus:ring-4"
+              />
+            </div>
+
+            <div className="relative flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-1">
+              <ListFilter className="h-4 w-4 text-muted-foreground" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="bg-transparent py-1.5 pr-2 text-xs font-semibold outline-none cursor-pointer"
+              >
+                <option value="manual">Manual Order</option>
+                <option value="newest">Latest Updates</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="size-desc">Largest Size</option>
+                <option value="size-asc">Smallest Size</option>
+              </select>
+            </div>
           </div>
         </div>
 

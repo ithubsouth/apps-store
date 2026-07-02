@@ -42,7 +42,8 @@ CREATE POLICY "Public Update" ON storage.objects
 CREATE POLICY "Public Delete" ON storage.objects
     FOR DELETE USING (bucket_id IN ('app-icons', 'apks'));
 
--- 4. Ensure database tables are accessible
+-- 4. Ensure database tables are accessible and schema is up to date
+ALTER TABLE public.apps ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 ALTER TABLE public.apps DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.apps TO anon, authenticated, service_role;
 
