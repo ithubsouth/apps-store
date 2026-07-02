@@ -195,7 +195,7 @@ export const updateApp = createServerFn({ method: "POST" })
     const sb = await admin();
     const updateData: any = {
       name: data.name.trim(),
-      category: data.category.trim(),
+      category: data.category.trim() || "General",
       description: data.description.trim(),
       version: data.version.trim(),
       updated_by: data.adminName,

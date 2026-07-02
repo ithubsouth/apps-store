@@ -118,7 +118,7 @@ function AppCard({ app }: { app: any }) {
           <Package className="h-10 w-10 text-white/80" strokeWidth={1.5} />
         )}
         <span className="absolute left-2 top-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
-          {app.category}
+          {app.category || "General"}
         </span>
       </div>
       <div className="flex flex-1 flex-col p-3.5">

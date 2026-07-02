@@ -449,7 +449,7 @@ function AppRow({
   if (editing) {
     return (
       <div className="p-4 space-y-4 bg-muted/30">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase text-muted-foreground">App Name</label>
             <input
@@ -457,6 +457,15 @@ function AppRow({
               value={form.name}
               onChange={e => setForm({...form, name: e.target.value})}
               placeholder="App name"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">Category</label>
+            <input
+              className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+              value={form.category}
+              onChange={e => setForm({...form, category: e.target.value})}
+              placeholder="Category"
             />
           </div>
           <div className="space-y-1">
