@@ -5,16 +5,21 @@ const ICON_BUCKET = "app-icons";
 const ICON_URL_TTL = 60 * 60; // 1 hour
 const DOWNLOAD_URL_TTL = 60 * 5; // 5 min
 
+let cachedAdmin: any = null;
+
 async function admin() {
+  if (cachedAdmin) return cachedAdmin;
   const { supabase } = await import("@/integrations/supabase/client");
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Only use admin if it's actually configured
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      cachedAdmin = supabaseAdmin;
       return supabaseAdmin;
     }
+    cachedAdmin = supabase;
     return supabase;
   } catch (e) {
+    cachedAdmin = supabase;
     return supabase;
   }
 }
@@ -24,53 +29,46 @@ async function adminAssert() {
   return assertAdmin();
 }
 
-async function signIcon(path: string | null | undefined): Promise<string | null> {
+function getIconUrl(path: string | null | undefined, sb: any): string | null {
   if (!path) return null;
-  const sb = await admin();
-  const { data } = await sb.storage.from(ICON_BUCKET).createSignedUrl(path, ICON_URL_TTL);
-  return data?.signedUrl ?? null;
+  // Use public URL for instant loading instead of signed URLs which require network calls
+  const { data } = sb.storage.from(ICON_BUCKET).getPublicUrl(path);
+  return data?.publicUrl ?? null;
 }
 
 export const listApps = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
 
-  // Try with sort_order first, fallback to standard sort if it fails (e.g. column not added yet)
-  let query = sb.from("apps").select("*");
+  // Fetch apps and logs in parallel for speed
+  const [appsRes, logsRes] = await Promise.all([
+    // Try to sort by sort_order, fallback if column missing
+    (async () => {
+      try {
+        const res = await sb.from("apps")
+          .select("*")
+          .order("sort_order", { ascending: true })
+          .order("updated_at", { ascending: false });
 
-  try {
-    const { data, error } = await query
-      .order("sort_order", { ascending: true })
-      .order("updated_at", { ascending: false });
+        if (res.error && res.error.message.includes('column "sort_order" does not exist')) {
+          return sb.from("apps").select("*").order("updated_at", { ascending: false });
+        }
+        return res;
+      } catch (e) {
+        return sb.from("apps").select("*").order("updated_at", { ascending: false });
+      }
+    })(),
+    sb.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(50)
+  ]);
 
-    if (error && error.message.includes('column "sort_order" does not exist')) {
-      console.warn("sort_order column missing, falling back to updated_at sort");
-      const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
-      if (fallback.error) throw new Error(fallback.error.message);
-      return processResults(fallback.data, sb);
-    }
+  if (appsRes.error) throw new Error(appsRes.error.message);
 
-    if (error) throw new Error(error.message);
-    return processResults(data, sb);
-  } catch (e) {
-    const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
-    if (fallback.error) throw new Error(fallback.error.message);
-    return processResults(fallback.data, sb);
-  }
+  const rows = (appsRes.data ?? []).map((a: any) => ({
+    ...a,
+    icon_url: getIconUrl(a.icon_path, sb)
+  }));
+
+  return { apps: rows, history: logsRes.data ?? [] };
 });
-
-async function processResults(data: any[] | null, sb: any) {
-  // Get audit logs
-  const { data: logs } = await sb
-    .from("audit_logs")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  const rows = await Promise.all(
-    (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
-  );
-  return { apps: rows, history: logs ?? [] };
-}
 
 export const getApp = createServerFn({ method: "GET" })
   .inputValidator((d: { id: string }) => d)
