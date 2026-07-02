@@ -165,7 +165,14 @@ export const createApp = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+    await sb.from("audit_logs").insert({
+      app_id: row.id,
+      app_name: row.name,
+      action: "UPLOAD",
+      performed_by: data.adminName,
+    });
     return row;
+
   });
 
 export const updateApp = createServerFn({ method: "POST" })
