@@ -212,14 +212,7 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
 
   return (
     <div className="space-y-10">
-      <div className="flex justify-between items-center">
-        <button
-          onClick={handleFix}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-500/20"
-        >
-          <Shield className="h-3.5 w-3.5" />
-          Fix Database Security
-        </button>
+      <div className="flex justify-end items-center">
         <button
           onClick={handleLock}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -228,6 +221,7 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
           Lock admin
         </button>
       </div>
+
 
       <UploadForm
         onCreated={() => {

@@ -20,6 +20,7 @@ export type Database = {
           apk_path: string
           category: string
           created_at: string
+          created_by: string | null
           description: string
           download_count: number
           icon_path: string | null
@@ -27,6 +28,7 @@ export type Database = {
           name: string
           size_bytes: number
           updated_at: string
+          updated_by: string | null
           version: string
         }
         Insert: {
@@ -34,6 +36,7 @@ export type Database = {
           apk_path: string
           category?: string
           created_at?: string
+          created_by?: string | null
           description?: string
           download_count?: number
           icon_path?: string | null
@@ -41,6 +44,7 @@ export type Database = {
           name: string
           size_bytes?: number
           updated_at?: string
+          updated_by?: string | null
           version?: string
         }
         Update: {
@@ -48,6 +52,7 @@ export type Database = {
           apk_path?: string
           category?: string
           created_at?: string
+          created_by?: string | null
           description?: string
           download_count?: number
           icon_path?: string | null
@@ -55,7 +60,35 @@ export type Database = {
           name?: string
           size_bytes?: number
           updated_at?: string
+          updated_by?: string | null
           version?: string
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          app_id: string | null
+          app_name: string
+          created_at: string
+          id: string
+          performed_by: string
+        }
+        Insert: {
+          action: string
+          app_id?: string | null
+          app_name: string
+          created_at?: string
+          id?: string
+          performed_by: string
+        }
+        Update: {
+          action?: string
+          app_id?: string | null
+          app_name?: string
+          created_at?: string
+          id?: string
+          performed_by?: string
         }
         Relationships: []
       }

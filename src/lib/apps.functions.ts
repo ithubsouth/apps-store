@@ -44,8 +44,8 @@ export const listApps = createServerFn({ method: "GET" }).handler(async () => {
     .from("audit_logs")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(50)
-    .catch(() => ({ data: [] }));
+    .limit(50);
+
 
   const rows = await Promise.all(
     (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
@@ -165,7 +165,14 @@ export const createApp = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+    await sb.from("audit_logs").insert({
+      app_id: row.id,
+      app_name: row.name,
+      action: "UPLOAD",
+      performed_by: data.adminName,
+    });
     return row;
+
   });
 
 export const updateApp = createServerFn({ method: "POST" })
@@ -196,8 +203,15 @@ export const updateApp = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+    await sb.from("audit_logs").insert({
+      app_id: row.id,
+      app_name: row.name,
+      action: "EDIT",
+      performed_by: data.adminName,
+    });
     return row;
   });
+
 
 export const deleteApp = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string; adminName: string }) => d)
