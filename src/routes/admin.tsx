@@ -198,15 +198,21 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
 
   async function handleFix() {
     toast.loading("Attempting to fix security...", { id: "fix" });
-    const res = await fix();
-    if (res.success) {
-      toast.success(res.message, { id: "fix" });
-      refetch();
-    } else {
-      toast.error("Could not fix automatically. Please use the Supabase SQL Editor.", {
-        id: "fix",
-        description: "Paste: ALTER TABLE public.apps DISABLE ROW LEVEL SECURITY;"
-      });
+    try {
+      const res = await fix();
+      if (res.success) {
+        toast.success(res.message, { id: "fix" });
+        refetch();
+      } else {
+        console.log("SQL to run:", res.sql);
+        toast.error("Manual fix required", {
+          id: "fix",
+          description: "Check the console for the SQL script to paste into Supabase SQL Editor.",
+          duration: 10000,
+        });
+      }
+    } catch (err) {
+      toast.error("Failed to connect to fix service", { id: "fix" });
     }
   }
 
