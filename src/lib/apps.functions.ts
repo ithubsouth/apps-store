@@ -44,8 +44,8 @@ export const listApps = createServerFn({ method: "GET" }).handler(async () => {
     .from("audit_logs")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(50)
-    .catch(() => ({ data: [] }));
+    .limit(50);
+
 
   const rows = await Promise.all(
     (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
