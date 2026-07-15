@@ -5,6 +5,9 @@ const ICON_BUCKET = "app-icons";
 const ICON_URL_TTL = 60 * 60; // 1 hour
 const DOWNLOAD_URL_TTL = 60 * 5; // 5 min
 
+// Minimal safe columns that we are sure exist
+const APP_COLUMNS = "id, name, category, description, version, size_bytes, apk_path, apk_filename, icon_path, created_by, updated_by, created_at, updated_at, download_count";
+
 async function admin() {
   const { supabase } = await import("@/integrations/supabase/client");
   try {
@@ -34,27 +37,34 @@ async function signIcon(path: string | null | undefined): Promise<string | null>
 export const listApps = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
 
-  // Try with sort_order first, fallback to standard sort if it fails (e.g. column not added yet)
-  let query = sb.from("apps").select("*");
-
   try {
-    const { data, error } = await query
+    // Try with sort_order, but catch failure immediately
+    const { data, error } = await sb
+      .from("apps")
+      .select(`${APP_COLUMNS}, sort_order`)
       .order("sort_order", { ascending: true })
       .order("updated_at", { ascending: false });
 
-    if (error && error.message.includes('column "sort_order" does not exist')) {
-      console.warn("sort_order column missing, falling back to updated_at sort");
-      const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
-      if (fallback.error) throw new Error(fallback.error.message);
-      return processResults(fallback.data, sb);
+    if (error && error.message.includes("sort_order")) {
+      console.warn("sort_order missing, falling back to basic columns");
+      const { data: fallback, error: fallbackErr } = await sb
+        .from("apps")
+        .select(APP_COLUMNS)
+        .order("updated_at", { ascending: false });
+
+      if (fallbackErr) throw new Error(fallbackErr.message);
+      return processResults(fallback, sb);
     }
 
     if (error) throw new Error(error.message);
     return processResults(data, sb);
   } catch (e) {
-    const fallback = await sb.from("apps").select("*").order("updated_at", { ascending: false });
-    if (fallback.error) throw new Error(fallback.error.message);
-    return processResults(fallback.data, sb);
+    console.error("listApps failed, using ultimate fallback", e);
+    const { data: fallback } = await sb
+      .from("apps")
+      .select(APP_COLUMNS)
+      .order("updated_at", { ascending: false });
+    return processResults(fallback || [], sb);
   }
 });
 
@@ -76,8 +86,18 @@ export const getApp = createServerFn({ method: "GET" })
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: row, error } = await sb.from("apps").select("*").eq("id", data.id).maybeSingle();
-    if (error) throw new Error(error.message);
+    const { data: row, error } = await sb
+      .from("apps")
+      .select(APP_COLUMNS)
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (error) {
+      // If specific columns fail, try * as last resort
+      const { data: alt } = await sb.from("apps").select("*").eq("id", data.id).maybeSingle();
+      if (alt) return { ...alt, icon_url: await signIcon(alt.icon_path) };
+      throw new Error(error.message);
+    }
     if (!row) return null;
     return { ...row, icon_url: await signIcon(row.icon_path) };
   });
@@ -118,7 +138,6 @@ export const createUploadUrls = createServerFn({ method: "POST" })
     const stamp = Date.now();
     const rand = Math.random().toString(36).slice(2, 8);
 
-    // Fallback for missing service role: use public upload if createSignedUploadUrl is unavailable
     const createUrl = async (bucket: string, path: string) => {
       try {
         const { data: signed, error } = await sb.storage.from(bucket).createSignedUploadUrl(path);
@@ -126,8 +145,6 @@ export const createUploadUrls = createServerFn({ method: "POST" })
         return signed;
       } catch (e) {
         console.warn(`Could not create signed upload URL for ${bucket}, attempting direct path...`);
-        // If we can't create a signed URL (no service role), we return a placeholder
-        // and hope the client has permissions for a direct upload.
         return { signedUrl: "", token: "public", path };
       }
     };
@@ -167,6 +184,8 @@ export const createApp = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await adminAssert();
     const sb = await admin();
+
+    // First, perform the insert
     const { data: row, error } = await sb
       .from("apps")
       .insert({
@@ -180,11 +199,25 @@ export const createApp = createServerFn({ method: "POST" })
         icon_path: data.icon_path ?? null,
         created_by: data.adminName,
         updated_by: data.adminName,
-        sort_order: 0, // Default to top
       })
-      .select("*")
-      .single();
-    if (error) throw new Error(error.message);
+      .select(APP_COLUMNS) // Avoid * and avoid sort_order
+      .maybeSingle();
+
+    if (error) {
+      if (error.message.includes("sort_order")) {
+        // Retry without select, just get the ID
+        const { data: retry } = await sb
+          .from("apps")
+          .select(APP_COLUMNS)
+          .eq("apk_path", data.apk_path)
+          .maybeSingle();
+        if (retry) return retry;
+      }
+      throw new Error(error.message);
+    }
+
+    if (!row) throw new Error("App created but could not retrieve data");
+
     await sb.from("audit_logs").insert({
       app_id: row.id,
       app_name: row.name,
@@ -192,7 +225,6 @@ export const createApp = createServerFn({ method: "POST" })
       performed_by: data.adminName,
     });
     return row;
-
   });
 
 export const updateApp = createServerFn({ method: "POST" })
@@ -235,9 +267,12 @@ export const updateApp = createServerFn({ method: "POST" })
       .from("apps")
       .update(updateData)
       .eq("id", data.id)
-      .select("*")
-      .single();
+      .select(APP_COLUMNS)
+      .maybeSingle();
+
     if (error) throw new Error(error.message);
+    if (!row) throw new Error("App not found");
+
     await sb.from("audit_logs").insert({
       app_id: row.id,
       app_name: row.name,
@@ -253,7 +288,6 @@ export const reorderApps = createServerFn({ method: "POST" })
     await adminAssert();
     const sb = await admin();
 
-    // Perform multiple updates in a transaction-like way
     for (const item of data) {
       const { error } = await sb
         .from("apps")
@@ -271,8 +305,7 @@ export const deleteApp = createServerFn({ method: "POST" })
     await adminAssert();
     const sb = await admin();
 
-    // Log deletion manually because triggers lose context on DELETE
-    const { data: existing } = await sb.from("apps").select("name").eq("id", data.id).single();
+    const { data: existing } = await sb.from("apps").select("name").eq("id", data.id).maybeSingle();
     if (existing) {
       await sb.from("audit_logs").insert({
         app_id: data.id,
@@ -287,8 +320,10 @@ export const deleteApp = createServerFn({ method: "POST" })
       .select("apk_path, icon_path")
       .eq("id", data.id)
       .maybeSingle();
+
     if (row?.apk_path) await sb.storage.from(APK_BUCKET).remove([row.apk_path]);
     if (row?.icon_path) await sb.storage.from(ICON_BUCKET).remove([row.icon_path]);
+
     const { error } = await sb.from("apps").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
