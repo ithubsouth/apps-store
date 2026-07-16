@@ -113,9 +113,14 @@ export const getDownloadUrl = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("App not found");
+
+    // Sanitize filename to avoid URL encoding issues in the Content-Disposition header
+    // This fixes issues where characters like '(' and ')' become '%28' and '%29'
+    const downloadName = row.apk_filename.replace(/[^\w.\-]+/g, "_");
+
     const { data: signed, error: sErr } = await sb.storage
       .from(APK_BUCKET)
-      .createSignedUrl(row.apk_path, DOWNLOAD_URL_TTL, { download: row.apk_filename });
+      .createSignedUrl(row.apk_path, DOWNLOAD_URL_TTL, { download: downloadName });
     if (sErr || !signed) throw new Error(sErr?.message ?? "Failed to sign URL");
     const current = await currentDownloads(data.id);
     await sb.from("apps").update({ download_count: current + 1 }).eq("id", data.id);
@@ -195,7 +200,7 @@ export const createApp = createServerFn({ method: "POST" })
         version: data.version.trim() || "1.0.0",
         size_bytes: data.size_bytes,
         apk_path: data.apk_path,
-        apk_filename: data.apk_filename,
+        apk_filename: data.apk_filename.replace(/[^\w.\-]+/g, "_"),
         icon_path: data.icon_path ?? null,
         created_by: data.adminName,
         updated_by: data.adminName,
@@ -256,7 +261,7 @@ export const updateApp = createServerFn({ method: "POST" })
 
     if (data.apk_path) {
       updateData.apk_path = data.apk_path;
-      updateData.apk_filename = data.apk_filename;
+      updateData.apk_filename = data.apk_filename.replace(/[^\w.\-]+/g, "_");
       updateData.size_bytes = data.size_bytes;
     }
     if (data.icon_path !== undefined) {
