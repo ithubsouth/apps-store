@@ -111,19 +111,27 @@ function AppDetail() {
                   <MetaField label="Last updated" value={formatDate(app.updated_at)} />
                 </dl>
 
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:opacity-70"
-                  style={{ background: "var(--gradient-hero)" }}
-                >
-                  {downloading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  {downloading ? "Preparing..." : "Download APK"}
-                </button>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:opacity-70"
+                    style={{ background: "var(--gradient-hero)" }}
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloading ? "Preparing..." : "Download APK"}
+                  </button>
+                  <button
+                    onClick={() => setShareOpen(true)}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-sm font-semibold transition hover:bg-muted"
+                  >
+                    <Share2 className="h-4 w-4" /> Share
+                  </button>
+                </div>
                 <p className="mt-3 text-xs text-muted-foreground">
                   {app.apk_filename} · {app.download_count} downloads
                 </p>
@@ -131,7 +139,19 @@ function AppDetail() {
             </div>
           </div>
         )}
+
+        {app && (
+          <ShareDialog
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            appName={app.name}
+            apkFilename={app.apk_filename}
+            pageUrl={typeof window !== "undefined" ? window.location.href : ""}
+            getFileUrl={async () => (await getDownload({ data: { id } })).url}
+          />
+        )}
       </div>
+
     </div>
   );
 }
