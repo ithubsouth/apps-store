@@ -8,6 +8,23 @@ import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { ShareDialog } from "@/components/share-dialog";
 
 export const Route = createFileRoute("/app/$id")({
+  head: () => ({
+    meta: [
+      { title: "App details & APK download · LEAD App Store" },
+      {
+        name: "description",
+        content:
+          "View app details, download the APK, or share it to another phone, TV or panel via Nearby Share, Bluetooth or QR code.",
+      },
+      { property: "og:title", content: "App details & APK download · LEAD App Store" },
+      {
+        property: "og:description",
+        content: "Download or share this Android app to phones, TVs and panels in seconds.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: AppDetail,
   notFoundComponent: () => (
     <div className="min-h-screen bg-background">
