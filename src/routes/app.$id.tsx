@@ -26,6 +26,7 @@ function AppDetail() {
   const { id } = Route.useParams();
   const getDownload = useServerFn(getDownloadUrl);
   const [downloading, setDownloading] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const { data: app, isLoading } = useQuery({
     queryKey: ["app", id],
@@ -37,6 +38,7 @@ function AppDetail() {
   });
 
   async function handleDownload() {
+    if (!app) return;
     setDownloading(true);
     try {
       const { url } = await getDownload({ data: { id } });
