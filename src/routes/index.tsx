@@ -6,6 +6,23 @@ import { listApps } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes } from "@/components/site-header";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "LEAD App Store · Download & share Android apps" },
+      {
+        name: "description",
+        content:
+          "Browse and download internal Android apps. Share any APK phone-to-phone via Nearby Share or Bluetooth, or to a TV, panel or Windows PC with a QR code.",
+      },
+      { property: "og:title", content: "LEAD App Store · Download & share Android apps" },
+      {
+        property: "og:description",
+        content: "Download internal Android apps and share them across phones, TVs and panels.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Home,
 });
 
