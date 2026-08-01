@@ -292,7 +292,7 @@ export const reorderApps = createServerFn({ method: "POST" })
     for (const item of data) {
       const { error } = await sb
         .from("apps")
-        .update({ sort_order: item.sort_order })
+        .update({ sort_order: item.sort_order } as never)
         .eq("id", item.id);
       if (error) console.error(`Failed to update sort_order for ${item.id}`, error);
     }

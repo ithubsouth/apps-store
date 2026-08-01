@@ -1,12 +1,30 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Download, Loader2, Package } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Package, Share2 } from "lucide-react";
 import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
+import { ShareDialog } from "@/components/share-dialog";
 
 export const Route = createFileRoute("/app/$id")({
+  head: () => ({
+    meta: [
+      { title: "App details & APK download · LEAD App Store" },
+      {
+        name: "description",
+        content:
+          "View app details, download the APK, or share it to another phone, TV or panel via Nearby Share, Bluetooth or QR code.",
+      },
+      { property: "og:title", content: "App details & APK download · LEAD App Store" },
+      {
+        property: "og:description",
+        content: "Download or share this Android app to phones, TVs and panels in seconds.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: AppDetail,
   notFoundComponent: () => (
     <div className="min-h-screen bg-background">
@@ -25,6 +43,7 @@ function AppDetail() {
   const { id } = Route.useParams();
   const getDownload = useServerFn(getDownloadUrl);
   const [downloading, setDownloading] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const { data: app, isLoading } = useQuery({
     queryKey: ["app", id],
@@ -36,6 +55,7 @@ function AppDetail() {
   });
 
   async function handleDownload() {
+    if (!app) return;
     setDownloading(true);
     try {
       const { url } = await getDownload({ data: { id } });
@@ -108,19 +128,27 @@ function AppDetail() {
                   <MetaField label="Last updated" value={formatDate(app.updated_at)} />
                 </dl>
 
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:opacity-70"
-                  style={{ background: "var(--gradient-hero)" }}
-                >
-                  {downloading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  {downloading ? "Preparing..." : "Download APK"}
-                </button>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:opacity-70"
+                    style={{ background: "var(--gradient-hero)" }}
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloading ? "Preparing..." : "Download APK"}
+                  </button>
+                  <button
+                    onClick={() => setShareOpen(true)}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-sm font-semibold transition hover:bg-muted"
+                  >
+                    <Share2 className="h-4 w-4" /> Share
+                  </button>
+                </div>
                 <p className="mt-3 text-xs text-muted-foreground">
                   {app.apk_filename} · {app.download_count} downloads
                 </p>
@@ -128,7 +156,19 @@ function AppDetail() {
             </div>
           </div>
         )}
+
+        {app && (
+          <ShareDialog
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            appName={app.name}
+            apkFilename={app.apk_filename}
+            pageUrl={typeof window !== "undefined" ? window.location.href : ""}
+            getFileUrl={async () => (await getDownload({ data: { id } })).url}
+          />
+        )}
       </div>
+
     </div>
   );
 }
