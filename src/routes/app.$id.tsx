@@ -1,10 +1,11 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Download, Loader2, Package } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Package, Share2 } from "lucide-react";
 import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
+import { ShareDialog } from "@/components/share-dialog";
 
 export const Route = createFileRoute("/app/$id")({
   component: AppDetail,
