@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 
 const APK_BUCKET = "apks";
 const ICON_BUCKET = "app-icons";
-const DOWNLOAD_URL_TTL = 60 * 5; // 5 min
 
 // Minimal safe columns that we are sure exist
 const APP_COLUMNS = "id, name, category, description, version, size_bytes, apk_path, apk_filename, icon_path, created_by, updated_by, created_at, updated_at, download_count";
@@ -113,11 +112,8 @@ export const getDownloadUrl = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!row) throw new Error("App not found");
 
-    const { data: signed, error: sErr } = await sb.storage
-      .from(APK_BUCKET)
-      .createSignedUrl(row.apk_path, DOWNLOAD_URL_TTL, { download: row.apk_filename });
-    if (sErr || !signed) throw new Error(sErr?.message ?? "Failed to sign URL");
-    return { url: signed.signedUrl };
+    const publicUrl = sb.storage.from(APK_BUCKET).getPublicUrl(row.apk_path).data.publicUrl;
+    return { url: `${publicUrl}?download=${encodeURIComponent(row.apk_filename)}` };
   });
 
 // ----- Admin-only mutations -----

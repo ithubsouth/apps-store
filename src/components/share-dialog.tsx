@@ -185,7 +185,7 @@ export function ShareDialog({
         </div>
 
         <div className="mt-4 grid gap-2">
-          {canShare && !preparedFile && (
+          {!preparedFile && (
             <button
               onClick={prepareFile}
               disabled={busy !== null}
