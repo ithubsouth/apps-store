@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { Bluetooth, Check, Copy, Loader2, QrCode, Share2, Smartphone, Wifi, X } from "lucide-react";
+import { Bluetooth, Check, Copy, Download, Loader2, QrCode, Share2, Smartphone, Unplug, Wifi, X } from "lucide-react";
 
 type ShareDialogProps = {
   open: boolean;
@@ -25,6 +25,9 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<null | "file" | "link">(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [preparedFile, setPreparedFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const canShare = useMemo(
     () => typeof navigator !== "undefined" && typeof navigator.share === "function",
@@ -34,10 +37,14 @@ export function ShareDialog({
   useEffect(() => {
     if (!open) return;
     setStatus(null);
+    setPreparedFile(null);
+    setProgress(null);
     QRCode.toDataURL(pageUrl, { width: 480, margin: 1, errorCorrectionLevel: "M" })
       .then(setQr)
       .catch(() => setQr(null));
   }, [open, pageUrl]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   if (!open) return null;
 
@@ -63,32 +70,70 @@ export function ShareDialog({
     }
   }
 
-  async function shareFile() {
+  async function prepareFile() {
     setBusy("file");
-    setStatus("Preparing the file…");
+    setStatus("Downloading the APK once for offline wireless sharing…");
+    setProgress(0);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const url = await getFileUrl();
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error("download failed");
-      const blob = await res.blob();
+      const total = Number(res.headers.get("content-length")) || 0;
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("stream unavailable");
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          received += value.byteLength;
+          if (total) setProgress(Math.round((received / total) * 100));
+        }
+      }
+      const blob = new Blob(chunks as BlobPart[], { type: "application/vnd.android.package-archive" });
       const file = new File([blob], apkFilename, {
         type: "application/vnd.android.package-archive",
       });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        setStatus(null);
-        await navigator.share({ files: [file], title: appName });
-      } else {
-        setStatus(
-          "This browser can't hand the file to Bluetooth / Nearby Share. Download the APK first, then share it from your Files app.",
-        );
-      }
+      setPreparedFile(file);
+      setProgress(100);
+      setStatus("APK ready. Tap “Share APK now” to open your device's wireless share options.");
     } catch (err) {
-      if ((err as Error)?.name === "AbortError") setStatus(null);
-      else setStatus("Couldn't share the file. Try downloading it and sharing from Files.");
+      if ((err as Error)?.name === "AbortError") setStatus("Preparation cancelled.");
+      else setStatus("This browser couldn't prepare the APK. Download it, then share it from the Files app.");
     } finally {
+      abortRef.current = null;
       setBusy(null);
     }
+  }
+
+  function sharePreparedFile() {
+    if (!preparedFile) return;
+    setStatus(null);
+    try {
+      if (!navigator.canShare?.({ files: [preparedFile] })) {
+        setStatus("This browser blocks APK file sharing. Save the APK and share it from the Files app instead.");
+        return;
+      }
+      void navigator.share({ files: [preparedFile], title: appName }).catch((err: Error) => {
+        if (err?.name !== "AbortError") setStatus("The system share sheet couldn't send this APK. Save it and share from Files.");
+      });
+    } catch {
+      setStatus("The system share sheet couldn't open. Save the APK and share it from Files.");
+    }
+  }
+
+  function savePreparedFile() {
+    if (!preparedFile) return;
+    const url = URL.createObjectURL(preparedFile);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = apkFilename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
@@ -109,7 +154,7 @@ export function ShareDialog({
           <div>
             <h2 className="font-display text-lg font-bold">Share {appName}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Phone → phone, phone → TV / panel, or Windows → Android.
+              Fast link sharing or an offline APK handoff through your device.
             </p>
           </div>
           <button
@@ -135,15 +180,14 @@ export function ShareDialog({
             <div className="mt-3 h-44 w-44 animate-pulse rounded-xl bg-muted" />
           )}
           <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">
-            Point the other device's camera at this code. Works on Android TV, panels and Windows —
-            both devices just need internet or the same network.
+            Scan on any receiver with a camera and browser. The receiver downloads directly.
           </p>
         </div>
 
         <div className="mt-4 grid gap-2">
-          {canShare && (
+          {!preparedFile && (
             <button
-              onClick={shareFile}
+              onClick={prepareFile}
               disabled={busy !== null}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-70"
               style={{ background: "var(--gradient-hero)" }}
@@ -153,7 +197,26 @@ export function ShareDialog({
               ) : (
                 <Bluetooth className="h-4 w-4" />
               )}
-              Send file via Bluetooth / Nearby Share
+              {busy === "file" && progress !== null ? `Preparing APK · ${progress}%` : "Prepare APK for wireless share"}
+            </button>
+          )}
+
+          {canShare && preparedFile && (
+            <button
+              onClick={sharePreparedFile}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              <Bluetooth className="h-4 w-4" /> Share APK now
+            </button>
+          )}
+
+          {preparedFile && (
+            <button
+              onClick={savePreparedFile}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted"
+            >
+              <Download className="h-4 w-4" /> Save APK to Files
             </button>
           )}
 
@@ -184,17 +247,24 @@ export function ShareDialog({
           <p className="flex gap-2">
             <Smartphone className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              <b className="text-foreground">Mobile → mobile:</b> use “Send file” and pick Nearby
-              Share, Quick Share or Bluetooth in your phone's share sheet — no internet needed on
-              the receiver.
+              <b className="text-foreground">Android → Android:</b> prepare once, tap “Share APK
+              now”, then choose Quick Share, Nearby Share or Bluetooth. Wi-Fi and Bluetooth may be
+              enabled without joining a Wi-Fi network.
             </span>
           </p>
           <p className="flex gap-2">
             <Wifi className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              <b className="text-foreground">TV / panel / Windows:</b> scan the QR code or open the
-              copied link in the device's browser and download directly.
+              <b className="text-foreground">Google TV / panel without a browser:</b> a receiver app
+              that accepts files must already be installed. On the sender, share the saved APK from
+              Files to that receiver app. A web page cannot discover a TV or install its receiver.
             </span>
+          </p>
+          <p className="flex gap-2">
+            <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span><b className="text-foreground">Disconnect:</b> sharing is a one-time transfer, not
+            a permanent connection. Close the system share screen; for Quick Share, turn device
+            visibility off afterward if desired.</span>
           </p>
         </div>
       </div>

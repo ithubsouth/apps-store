@@ -59,29 +59,17 @@ function AppDetail() {
     setDownloading(true);
     try {
       const { url } = await getDownload({ data: { id } });
-
-      // Try to fetch the file and trigger download with the exact filename
-      // This bypasses server-side encoding issues in the Content-Disposition header
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Download request failed");
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
       const a = document.createElement("a");
-      a.href = blobUrl;
+      a.href = url;
       a.download = app.apk_filename;
+      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Blob download failed, falling back to direct navigation", err);
-      // Fallback: if fetch fails (CORS, memory, etc), use direct navigation
-      const { url } = await getDownload({ data: { id } });
-      window.location.href = url;
+      console.error("Download failed", err);
     } finally {
-      setTimeout(() => setDownloading(false), 1500);
+      setDownloading(false);
     }
   }
 
@@ -163,7 +151,7 @@ function AppDetail() {
             onClose={() => setShareOpen(false)}
             appName={app.name}
             apkFilename={app.apk_filename}
-            pageUrl={typeof window !== "undefined" ? window.location.href : ""}
+            pageUrl={typeof window !== "undefined" ? window.location.href : `https://apps-store.lovable.app/app/${id}`}
             getFileUrl={async () => (await getDownload({ data: { id } })).url}
           />
         )}
