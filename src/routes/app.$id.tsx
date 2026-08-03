@@ -134,7 +134,7 @@ function AppDetail() {
                     onClick={() => setShareOpen(true)}
                     className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-sm font-semibold transition hover:bg-muted"
                   >
-                    <Share2 className="h-4 w-4" /> Share
+                    <Share2 className="h-4 w-4" /> Transfer
                   </button>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
