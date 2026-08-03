@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 
 const APK_BUCKET = "apks";
 const ICON_BUCKET = "app-icons";
+const ICON_URL_TTL = 60 * 60; // 1 hour
+const DOWNLOAD_URL_TTL = 60 * 5; // 5 min
 
 // Minimal safe columns that we are sure exist
 const APP_COLUMNS = "id, name, category, description, version, size_bytes, apk_path, apk_filename, icon_path, created_by, updated_by, created_at, updated_at, download_count";
@@ -28,7 +30,8 @@ async function adminAssert() {
 async function signIcon(path: string | null | undefined): Promise<string | null> {
   if (!path) return null;
   const sb = await admin();
-  return sb.storage.from(ICON_BUCKET).getPublicUrl(path).data.publicUrl;
+  const { data } = await sb.storage.from(ICON_BUCKET).createSignedUrl(path, ICON_URL_TTL);
+  return data?.signedUrl ?? null;
 }
 
 export const listApps = createServerFn({ method: "GET" }).handler(async () => {
@@ -73,10 +76,9 @@ async function processResults(data: any[] | null, sb: any) {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const rows = (data ?? []).map((a) => ({
-    ...a,
-    icon_url: a.icon_path ? sb.storage.from(ICON_BUCKET).getPublicUrl(a.icon_path).data.publicUrl : null,
-  }));
+  const rows = await Promise.all(
+    (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
+  );
   return { apps: rows, history: logs ?? [] };
 }
 
@@ -112,9 +114,20 @@ export const getDownloadUrl = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!row) throw new Error("App not found");
 
-    const publicUrl = sb.storage.from(APK_BUCKET).getPublicUrl(row.apk_path).data.publicUrl;
-    return { url: `${publicUrl}?download=${encodeURIComponent(row.apk_filename)}` };
+    const { data: signed, error: sErr } = await sb.storage
+      .from(APK_BUCKET)
+      .createSignedUrl(row.apk_path, DOWNLOAD_URL_TTL, { download: row.apk_filename });
+    if (sErr || !signed) throw new Error(sErr?.message ?? "Failed to sign URL");
+    const current = await currentDownloads(data.id);
+    await sb.from("apps").update({ download_count: current + 1 }).eq("id", data.id);
+    return { url: signed.signedUrl };
   });
+
+async function currentDownloads(id: string): Promise<number> {
+  const sb = await admin();
+  const { data } = await sb.from("apps").select("download_count").eq("id", id).maybeSingle();
+  return data?.download_count ?? 0;
+}
 
 // ----- Admin-only mutations -----
 

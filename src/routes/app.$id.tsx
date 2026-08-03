@@ -59,17 +59,29 @@ function AppDetail() {
     setDownloading(true);
     try {
       const { url } = await getDownload({ data: { id } });
+
+      // Try to fetch the file and trigger download with the exact filename
+      // This bypasses server-side encoding issues in the Content-Disposition header
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Download request failed");
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
-      a.href = url;
+      a.href = blobUrl;
       a.download = app.apk_filename;
-      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Download failed", err);
+      console.error("Blob download failed, falling back to direct navigation", err);
+      // Fallback: if fetch fails (CORS, memory, etc), use direct navigation
+      const { url } = await getDownload({ data: { id } });
+      window.location.href = url;
     } finally {
-      setDownloading(false);
+      setTimeout(() => setDownloading(false), 1500);
     }
   }
 
@@ -134,7 +146,7 @@ function AppDetail() {
                     onClick={() => setShareOpen(true)}
                     className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-sm font-semibold transition hover:bg-muted"
                   >
-                    <Share2 className="h-4 w-4" /> Transfer
+                    <Share2 className="h-4 w-4" /> Share
                   </button>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
@@ -151,7 +163,7 @@ function AppDetail() {
             onClose={() => setShareOpen(false)}
             appName={app.name}
             apkFilename={app.apk_filename}
-            pageUrl={typeof window !== "undefined" ? window.location.href : `https://apps-store.lovable.app/app/${id}`}
+            pageUrl={typeof window !== "undefined" ? window.location.href : ""}
             getFileUrl={async () => (await getDownload({ data: { id } })).url}
           />
         )}
