@@ -1,10 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { Bluetooth, Check, Copy, Download, Loader2, QrCode, Share2, Smartphone, Wifi, X } from "lucide-react";
+import {
+  Bluetooth,
+  Check,
+  Copy,
+  Download,
+  Loader2,
+  QrCode,
+  Radio,
+  Share2,
+  X,
+  Zap,
+} from "lucide-react";
+import { beamSend, makeBeamCode, type BeamHandle } from "@/lib/beam";
+import { loadApk, getCachedApk, saveFile } from "@/lib/apk-cache";
 
 type ShareDialogProps = {
   open: boolean;
   onClose: () => void;
+  appId: string;
   appName: string;
   apkFilename: string;
   /** Public page URL for this app (works on TVs, panels, Windows). */
@@ -16,17 +30,27 @@ type ShareDialogProps = {
 export function ShareDialog({
   open,
   onClose,
+  appId,
   appName,
   apkFilename,
   pageUrl,
   getFileUrl,
 }: ShareDialogProps) {
+  const cacheKey = `apk:${appId}:${apkFilename}`;
+
+  const [beamCode] = useState(() => makeBeamCode());
   const [qr, setQr] = useState<string | null>(null);
-  const [qrMode, setQrMode] = useState<"page" | "file">("page");
-  const [qrTarget, setQrTarget] = useState(pageUrl);
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState<null | "file" | "link" | "qr" | "save">(null);
+  const [busy, setBusy] = useState<null | "file" | "link" | "save">(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [beamStatus, setBeamStatus] = useState<string | null>(null);
+  const [beaming, setBeaming] = useState(false);
+  const [pct, setPct] = useState(0);
+  const [prep, setPrep] = useState(0);
+  const beam = useRef<BeamHandle | null>(null);
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const receiveUrl = `${origin}/receive?code=${beamCode}`;
 
   const canShare = useMemo(
     () => typeof navigator !== "undefined" && typeof navigator.share === "function",
@@ -36,26 +60,63 @@ export function ShareDialog({
   useEffect(() => {
     if (!open) return;
     setStatus(null);
-    setQrMode("page");
-    setQrTarget(pageUrl);
-  }, [open, pageUrl]);
+    setBeamStatus(null);
+    setPct(0);
+    QRCode.toDataURL(receiveUrl, { width: 480, margin: 1, errorCorrectionLevel: "M" })
+      .then(setQr)
+      .catch(() => setQr(null));
+  }, [open, receiveUrl]);
 
   useEffect(() => {
-    if (!open || !qrTarget) return;
-    let cancelled = false;
-    QRCode.toDataURL(qrTarget, { width: 480, margin: 1, errorCorrectionLevel: "M" })
-      .then((d) => !cancelled && setQr(d))
-      .catch(() => !cancelled && setQr(null));
-    return () => {
-      cancelled = true;
-    };
-  }, [open, qrTarget]);
+    if (!open) {
+      beam.current?.cancel();
+      beam.current = null;
+      setBeaming(false);
+    }
+  }, [open]);
 
   if (!open) return null;
 
+  /** Fetch once, reuse for every action afterwards. */
+  async function getFile() {
+    const cached = getCachedApk(cacheKey);
+    if (cached) return cached;
+    return loadApk(cacheKey, apkFilename, getFileUrl, (l, t) =>
+      setPrep(t ? Math.round((l / t) * 100) : 0),
+    );
+  }
+
+  async function startBeam() {
+    setBeamStatus("Preparing the APK…");
+    setBeaming(true);
+    setPct(0);
+    try {
+      const file = await getFile();
+      beam.current = beamSend(beamCode, file, appName, {
+        onStatus: setBeamStatus,
+        onProgress: (sent, total) => setPct(Math.round((sent / total) * 100)),
+        onDone: () => setBeaming(false),
+        onError: (m) => {
+          setBeamStatus(m);
+          setBeaming(false);
+        },
+      });
+    } catch {
+      setBeamStatus("Couldn't load the APK. Check your connection and try again.");
+      setBeaming(false);
+    }
+  }
+
+  function stopBeam() {
+    beam.current?.cancel();
+    beam.current = null;
+    setBeaming(false);
+    setBeamStatus("Transfer stopped.");
+  }
+
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(qrTarget);
+      await navigator.clipboard.writeText(receiveUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -67,61 +128,13 @@ export function ShareDialog({
     setBusy("link");
     setStatus(null);
     try {
-      await navigator.share({ title: appName, text: `Install ${appName}`, url: qrTarget });
+      await navigator.share({
+        title: appName,
+        text: `Receive ${appName} — code ${beamCode}`,
+        url: receiveUrl,
+      });
     } catch (err) {
       if ((err as Error)?.name !== "AbortError") setStatus("Sharing was cancelled or unavailable.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function useDirectFileQr() {
-    setBusy("qr");
-    setStatus(null);
-    try {
-      const url = await getFileUrl();
-      setQrTarget(url);
-      setQrMode("file");
-      setStatus("Direct APK link ready — scanning now downloads the file straight away.");
-    } catch {
-      setStatus("Couldn't create a direct file link. Use the page link instead.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function fetchApkFile(): Promise<File> {
-    const url = await getFileUrl();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("download failed");
-    const blob = await res.blob();
-    return new File([blob], apkFilename, {
-      type: "application/vnd.android.package-archive",
-    });
-  }
-
-  function saveToDevice(file: File) {
-    const blobUrl = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = apkFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
-  }
-
-  async function downloadForOfflineShare() {
-    setBusy("save");
-    setStatus("Downloading the APK to this device…");
-    try {
-      const file = await fetchApkFile();
-      saveToDevice(file);
-      setStatus(
-        `Saved ${apkFilename} to Downloads. Open Files → Downloads, long-press it and choose Bluetooth, Nearby/Quick Share or Wi-Fi Direct — the receiver needs no internet.`,
-      );
-    } catch {
-      setStatus("Couldn't download the file. Check your connection and try again.");
     } finally {
       setBusy(null);
     }
@@ -131,37 +144,34 @@ export function ShareDialog({
     setBusy("file");
     setStatus("Preparing the file…");
     try {
-      const file = await fetchApkFile();
-
+      const file = await getFile();
       if (navigator.canShare?.({ files: [file] })) {
         setStatus(null);
         await navigator.share({ files: [file], title: appName });
       } else {
-        // Guaranteed fallback: save it, then the OS share sheet from Files
-        // exposes Bluetooth / Nearby Share / Wi-Fi Direct.
-        saveToDevice(file);
-        setStatus(
-          `This browser can't hand files to Bluetooth directly, so ${apkFilename} was saved to Downloads. Open Files → Downloads, long-press it and share via Bluetooth, Nearby/Quick Share or Wi-Fi Direct.`,
-        );
+        saveFile(file, apkFilename);
+        setStatus(`This browser can't hand files to the share sheet — ${apkFilename} was saved instead.`);
       }
     } catch (err) {
       if ((err as Error)?.name === "AbortError") setStatus(null);
-      else {
-        setStatus("Couldn't share the file directly — trying a download instead…");
-        try {
-          saveToDevice(await fetchApkFile());
-          setStatus(
-            `Saved ${apkFilename} to Downloads. Share it from Files via Bluetooth or Nearby Share.`,
-          );
-        } catch {
-          setStatus("Couldn't fetch the APK. Check your connection and try again.");
-        }
-      }
+      else setStatus("Couldn't share the file. Try the direct beam above.");
     } finally {
       setBusy(null);
     }
   }
 
+  async function saveApk() {
+    setBusy("save");
+    setStatus(null);
+    try {
+      saveFile(await getFile(), apkFilename);
+      setStatus(`Saved ${apkFilename} to this device.`);
+    } catch {
+      setStatus("Couldn't download the file. Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div
@@ -179,9 +189,10 @@ export function ShareDialog({
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-lg font-bold">Share {appName}</h2>
+            <h2 className="font-display text-lg font-bold">Send {appName}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Phone → phone, phone → TV / panel, or Windows → Android.
+              Laptop → phone, phone → phone, phone → TV or panel. The file transfers directly
+              between the two devices.
             </p>
           </div>
           <button
@@ -193,71 +204,72 @@ export function ShareDialog({
           </button>
         </div>
 
-        <div className="mt-5 flex flex-col items-center rounded-2xl border border-border bg-background p-5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <QrCode className="h-3.5 w-3.5" />
-            {qrMode === "file" ? "Scan to download APK" : "Scan to install"}
+        {/* Direct beam */}
+        <div className="mt-5 rounded-2xl border border-border bg-background p-5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+            <Zap className="h-3.5 w-3.5" /> Direct beam — no manual sharing
           </div>
-          {qr ? (
-            <img
-              src={qr}
-              alt={`QR code linking to ${appName}`}
-              className="mt-3 h-44 w-44 rounded-xl bg-white p-2"
-            />
-          ) : (
-            <div className="mt-3 h-44 w-44 animate-pulse rounded-xl bg-muted" />
+
+          <div className="mt-4 flex flex-col items-center">
+            {qr ? (
+              <img
+                src={qr}
+                alt={`QR code to receive ${appName}`}
+                className="h-40 w-40 rounded-xl bg-white p-2"
+              />
+            ) : (
+              <div className="h-40 w-40 animate-pulse rounded-xl bg-muted" />
+            )}
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              On the receiving device scan this code, or open{" "}
+              <b className="text-foreground">{origin.replace(/^https?:\/\//, "")}/receive</b> and
+              enter
+            </p>
+            <div className="mt-2 font-display text-2xl font-bold tracking-[0.3em]">{beamCode}</div>
+          </div>
+
+          <button
+            onClick={beaming ? stopBeam : startBeam}
+            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            {beaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
+            {beaming ? "Sending — tap to stop" : "Start direct transfer"}
+          </button>
+
+          {(pct > 0 || (beaming && prep > 0)) && (
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct || prep}%`, background: "var(--gradient-hero)" }}
+              />
+            </div>
+          )}
+          {beamStatus && (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">{beamStatus}</p>
           )}
           <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">
-            Point the other device's camera at this code. Works on Android TV, panels and Windows —
-            both devices just need internet or the same network.
+            On the same Wi-Fi the bytes travel straight over the local network and the APK saves
+            itself on the receiver — nothing to open in Files.
           </p>
-          <button
-            onClick={qrMode === "file" ? () => { setQrMode("page"); setQrTarget(pageUrl); setStatus(null); } : useDirectFileQr}
-            disabled={busy !== null}
-            className="mt-3 text-[11px] font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
-          >
-            {busy === "qr"
-              ? "Preparing direct link…"
-              : qrMode === "file"
-                ? "Switch back to app page QR"
-                : "Switch to direct APK download QR"}
-          </button>
         </div>
 
+        {/* Other options */}
         <div className="mt-4 grid gap-2">
           {canShare && (
             <button
               onClick={shareFile}
               disabled={busy !== null}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-70"
-              style={{ background: "var(--gradient-hero)" }}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
             >
               {busy === "file" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Bluetooth className="h-4 w-4" />
               )}
-              Send file via Bluetooth / Nearby Share
+              Send via Bluetooth / Nearby Share
             </button>
           )}
-
-          <button
-            onClick={downloadForOfflineShare}
-            disabled={busy !== null}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-70 ${
-              canShare
-                ? "border border-border bg-card hover:bg-muted"
-                : "text-primary-foreground hover:opacity-95"
-            }`}
-            style={canShare ? undefined : { background: "var(--gradient-hero)" }}
-          >
-            {busy === "save" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Save APK for Bluetooth / Wi-Fi Direct
-          </button>
 
           {canShare && (
             <button
@@ -265,7 +277,7 @@ export function ShareDialog({
               disabled={busy !== null}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
             >
-              <Share2 className="h-4 w-4" /> Share install link
+              <Share2 className="h-4 w-4" /> Share receive link
             </button>
           )}
 
@@ -274,32 +286,31 @@ export function ShareDialog({
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted"
           >
             {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-            {copied ? "Link copied" : qrMode === "file" ? "Copy direct APK link" : "Copy install link"}
+            {copied ? "Link copied" : "Copy receive link"}
+          </button>
+
+          <button
+            onClick={saveApk}
+            disabled={busy !== null}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
+          >
+            {busy === "save" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Save APK to this device
           </button>
         </div>
-
 
         {status && (
           <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">{status}</p>
         )}
 
-        <div className="mt-5 space-y-2 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
-          <p className="flex gap-2">
-            <Smartphone className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              <b className="text-foreground">Mobile → mobile:</b> use “Send file” and pick Nearby
-              Share, Quick Share or Bluetooth in your phone's share sheet — no internet needed on
-              the receiver.
-            </span>
-          </p>
-          <p className="flex gap-2">
-            <Wifi className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              <b className="text-foreground">TV / panel / Windows:</b> scan the QR code or open the
-              copied link in the device's browser and download directly.
-            </span>
-          </p>
-        </div>
+        <p className="mt-4 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
+          The APK is fetched only once per session — every transfer after that reuses the same copy
+          instead of downloading again.
+        </p>
       </div>
     </div>
   );

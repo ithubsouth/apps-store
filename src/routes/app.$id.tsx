@@ -6,6 +6,7 @@ import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { ShareDialog } from "@/components/share-dialog";
+import { loadApk, saveFile } from "@/lib/apk-cache";
 
 export const Route = createFileRoute("/app/$id")({
   head: () => ({
@@ -58,30 +59,17 @@ function AppDetail() {
     if (!app) return;
     setDownloading(true);
     try {
-      const { url } = await getDownload({ data: { id } });
-
-      // Try to fetch the file and trigger download with the exact filename
-      // This bypasses server-side encoding issues in the Content-Disposition header
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Download request failed");
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = app.apk_filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(blobUrl);
+      const file = await loadApk(`apk:${id}:${app.apk_filename}`, app.apk_filename, async () => {
+        const { url } = await getDownload({ data: { id } });
+        return url;
+      });
+      saveFile(file, app.apk_filename);
     } catch (err) {
-      console.error("Blob download failed, falling back to direct navigation", err);
-      // Fallback: if fetch fails (CORS, memory, etc), use direct navigation
+      console.error("Cached download failed, falling back to direct navigation", err);
       const { url } = await getDownload({ data: { id } });
       window.location.href = url;
     } finally {
-      setTimeout(() => setDownloading(false), 1500);
+      setTimeout(() => setDownloading(false), 1200);
     }
   }
 
@@ -161,6 +149,7 @@ function AppDetail() {
           <ShareDialog
             open={shareOpen}
             onClose={() => setShareOpen(false)}
+            appId={id}
             appName={app.name}
             apkFilename={app.apk_filename}
             pageUrl={typeof window !== "undefined" ? window.location.href : ""}
