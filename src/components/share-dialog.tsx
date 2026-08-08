@@ -195,7 +195,8 @@ export function ShareDialog({
 
         <div className="mt-5 flex flex-col items-center rounded-2xl border border-border bg-background p-5">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <QrCode className="h-3.5 w-3.5" /> Scan to install
+            <QrCode className="h-3.5 w-3.5" />
+            {qrMode === "file" ? "Scan to download APK" : "Scan to install"}
           </div>
           {qr ? (
             <img
@@ -210,6 +211,17 @@ export function ShareDialog({
             Point the other device's camera at this code. Works on Android TV, panels and Windows —
             both devices just need internet or the same network.
           </p>
+          <button
+            onClick={qrMode === "file" ? () => { setQrMode("page"); setQrTarget(pageUrl); setStatus(null); } : useDirectFileQr}
+            disabled={busy !== null}
+            className="mt-3 text-[11px] font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
+          >
+            {busy === "qr"
+              ? "Preparing direct link…"
+              : qrMode === "file"
+                ? "Switch back to app page QR"
+                : "Switch to direct APK download QR"}
+          </button>
         </div>
 
         <div className="mt-4 grid gap-2">
@@ -229,6 +241,24 @@ export function ShareDialog({
             </button>
           )}
 
+          <button
+            onClick={downloadForOfflineShare}
+            disabled={busy !== null}
+            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-70 ${
+              canShare
+                ? "border border-border bg-card hover:bg-muted"
+                : "text-primary-foreground hover:opacity-95"
+            }`}
+            style={canShare ? undefined : { background: "var(--gradient-hero)" }}
+          >
+            {busy === "save" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Save APK for Bluetooth / Wi-Fi Direct
+          </button>
+
           {canShare && (
             <button
               onClick={shareLink}
@@ -244,9 +274,10 @@ export function ShareDialog({
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted"
           >
             {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-            {copied ? "Link copied" : "Copy install link"}
+            {copied ? "Link copied" : qrMode === "file" ? "Copy direct APK link" : "Copy install link"}
           </button>
         </div>
+
 
         {status && (
           <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">{status}</p>
