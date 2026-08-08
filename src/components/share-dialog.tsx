@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
-import { Bluetooth, Check, Copy, Loader2, QrCode, Share2, Smartphone, Wifi, X } from "lucide-react";
+import { Bluetooth, Check, Copy, Download, Loader2, QrCode, Share2, Smartphone, Wifi, X } from "lucide-react";
 
 type ShareDialogProps = {
   open: boolean;
