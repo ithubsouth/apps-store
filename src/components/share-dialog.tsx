@@ -22,8 +22,10 @@ export function ShareDialog({
   getFileUrl,
 }: ShareDialogProps) {
   const [qr, setQr] = useState<string | null>(null);
+  const [qrMode, setQrMode] = useState<"page" | "file">("page");
+  const [qrTarget, setQrTarget] = useState(pageUrl);
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState<null | "file" | "link">(null);
+  const [busy, setBusy] = useState<null | "file" | "link" | "qr" | "save">(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const canShare = useMemo(
@@ -34,16 +36,26 @@ export function ShareDialog({
   useEffect(() => {
     if (!open) return;
     setStatus(null);
-    QRCode.toDataURL(pageUrl, { width: 480, margin: 1, errorCorrectionLevel: "M" })
-      .then(setQr)
-      .catch(() => setQr(null));
+    setQrMode("page");
+    setQrTarget(pageUrl);
   }, [open, pageUrl]);
+
+  useEffect(() => {
+    if (!open || !qrTarget) return;
+    let cancelled = false;
+    QRCode.toDataURL(qrTarget, { width: 480, margin: 1, errorCorrectionLevel: "M" })
+      .then((d) => !cancelled && setQr(d))
+      .catch(() => !cancelled && setQr(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, qrTarget]);
 
   if (!open) return null;
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(pageUrl);
+      await navigator.clipboard.writeText(qrTarget);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -55,9 +67,61 @@ export function ShareDialog({
     setBusy("link");
     setStatus(null);
     try {
-      await navigator.share({ title: appName, text: `Install ${appName}`, url: pageUrl });
+      await navigator.share({ title: appName, text: `Install ${appName}`, url: qrTarget });
     } catch (err) {
       if ((err as Error)?.name !== "AbortError") setStatus("Sharing was cancelled or unavailable.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function useDirectFileQr() {
+    setBusy("qr");
+    setStatus(null);
+    try {
+      const url = await getFileUrl();
+      setQrTarget(url);
+      setQrMode("file");
+      setStatus("Direct APK link ready — scanning now downloads the file straight away.");
+    } catch {
+      setStatus("Couldn't create a direct file link. Use the page link instead.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function fetchApkFile(): Promise<File> {
+    const url = await getFileUrl();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("download failed");
+    const blob = await res.blob();
+    return new File([blob], apkFilename, {
+      type: "application/vnd.android.package-archive",
+    });
+  }
+
+  function saveToDevice(file: File) {
+    const blobUrl = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = apkFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+  }
+
+  async function downloadForOfflineShare() {
+    setBusy("save");
+    setStatus("Downloading the APK to this device…");
+    try {
+      const file = await fetchApkFile();
+      saveToDevice(file);
+      setStatus(
+        `Saved ${apkFilename} to Downloads. Open Files → Downloads, long-press it and choose Bluetooth, Nearby/Quick Share or Wi-Fi Direct — the receiver needs no internet.`,
+      );
+    } catch {
+      setStatus("Couldn't download the file. Check your connection and try again.");
     } finally {
       setBusy(null);
     }
@@ -67,29 +131,37 @@ export function ShareDialog({
     setBusy("file");
     setStatus("Preparing the file…");
     try {
-      const url = await getFileUrl();
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("download failed");
-      const blob = await res.blob();
-      const file = new File([blob], apkFilename, {
-        type: "application/vnd.android.package-archive",
-      });
+      const file = await fetchApkFile();
 
       if (navigator.canShare?.({ files: [file] })) {
         setStatus(null);
         await navigator.share({ files: [file], title: appName });
       } else {
+        // Guaranteed fallback: save it, then the OS share sheet from Files
+        // exposes Bluetooth / Nearby Share / Wi-Fi Direct.
+        saveToDevice(file);
         setStatus(
-          "This browser can't hand the file to Bluetooth / Nearby Share. Download the APK first, then share it from your Files app.",
+          `This browser can't hand files to Bluetooth directly, so ${apkFilename} was saved to Downloads. Open Files → Downloads, long-press it and share via Bluetooth, Nearby/Quick Share or Wi-Fi Direct.`,
         );
       }
     } catch (err) {
       if ((err as Error)?.name === "AbortError") setStatus(null);
-      else setStatus("Couldn't share the file. Try downloading it and sharing from Files.");
+      else {
+        setStatus("Couldn't share the file directly — trying a download instead…");
+        try {
+          saveToDevice(await fetchApkFile());
+          setStatus(
+            `Saved ${apkFilename} to Downloads. Share it from Files via Bluetooth or Nearby Share.`,
+          );
+        } catch {
+          setStatus("Couldn't fetch the APK. Check your connection and try again.");
+        }
+      }
     } finally {
       setBusy(null);
     }
   }
+
 
   return (
     <div
