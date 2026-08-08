@@ -161,6 +161,7 @@ function AppDetail() {
           <ShareDialog
             open={shareOpen}
             onClose={() => setShareOpen(false)}
+            appId={id}
             appName={app.name}
             apkFilename={app.apk_filename}
             pageUrl={typeof window !== "undefined" ? window.location.href : ""}
