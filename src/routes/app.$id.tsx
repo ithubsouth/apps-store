@@ -6,6 +6,7 @@ import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { ShareDialog } from "@/components/share-dialog";
+import { loadApk, saveFile } from "@/lib/apk-cache";
 
 export const Route = createFileRoute("/app/$id")({
   head: () => ({
