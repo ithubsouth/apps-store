@@ -159,7 +159,7 @@ export function ShareDialog({
 
         <div className="mt-5 grid gap-3">
           <button
-            onClick={() => nativeSend("wifi")}
+            onClick={() => nativeSend()}
             disabled={busy !== null}
             className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-70"
             style={{ background: "var(--gradient-hero)" }}
@@ -169,22 +169,19 @@ export function ShareDialog({
             ) : (
               <Wifi className="h-4 w-4" />
             )}
-            Send over Wi-Fi Direct (Nearby Share)
+            Wi-Fi Direct — show nearby devices
           </button>
 
           <button
-            onClick={() => nativeSend("bt")}
+            onClick={() => nativeSend()}
             disabled={busy !== null}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
           >
-            {busy === "bt" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Bluetooth className="h-4 w-4" />
-            )}
-            Send over Bluetooth
+            <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+            Refresh device list
           </button>
         </div>
+
 
         {prep > 0 && prep < 100 && (
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
