@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bluetooth, Loader2, Radio, Wifi, X } from "lucide-react";
+import { Loader2, Radio, RefreshCw, Wifi, X } from "lucide-react";
 import { beamSend, makeBeamCode, type BeamHandle } from "@/lib/beam";
 import { loadApk, getCachedApk, saveFile } from "@/lib/apk-cache";
 
@@ -60,18 +60,19 @@ export function ShareDialog({
     );
   }
 
-  /** Hands the APK to the phone's own transfer picker (Nearby Share = Wi-Fi Direct, or Bluetooth). */
-  async function nativeSend(kind: "wifi" | "bt") {
-    setBusy(kind);
+  /**
+   * Hands the APK to Android's own nearby-device picker (Nearby / Quick Share).
+   * That picker runs on Wi-Fi Direct underneath and lists the nearby devices by
+   * name — Bluetooth targets show up in the very same sheet, so there is no
+   * separate Bluetooth button. No browser exposes Wi-Fi Direct scanning itself.
+   */
+  async function nativeSend() {
+    setBusy("wifi");
     setStatus("Getting the app ready…");
     try {
       const file = await getFile();
       if (navigator.canShare?.({ files: [file] })) {
-        setStatus(
-          kind === "wifi"
-            ? "Pick Nearby Share / Quick Share, then choose the receiving device."
-            : "Pick Bluetooth, then choose the paired device.",
-        );
+        setStatus("Pick Nearby Share / Quick Share, then tap the receiving device in the list.");
         await navigator.share({ files: [file], title: appName });
         setStatus("Sent — the receiving device just has to accept it.");
       } else {
@@ -87,6 +88,7 @@ export function ShareDialog({
       setBusy(null);
     }
   }
+
 
   async function startBeam() {
     setBeamStatus("Getting the app ready…");
@@ -157,7 +159,7 @@ export function ShareDialog({
 
         <div className="mt-5 grid gap-3">
           <button
-            onClick={() => nativeSend("wifi")}
+            onClick={() => nativeSend()}
             disabled={busy !== null}
             className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-70"
             style={{ background: "var(--gradient-hero)" }}
@@ -167,22 +169,19 @@ export function ShareDialog({
             ) : (
               <Wifi className="h-4 w-4" />
             )}
-            Send over Wi-Fi Direct (Nearby Share)
+            Wi-Fi Direct — show nearby devices
           </button>
 
           <button
-            onClick={() => nativeSend("bt")}
+            onClick={() => nativeSend()}
             disabled={busy !== null}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
           >
-            {busy === "bt" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Bluetooth className="h-4 w-4" />
-            )}
-            Send over Bluetooth
+            <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+            Refresh device list
           </button>
         </div>
+
 
         {prep > 0 && prep < 100 && (
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
