@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bluetooth, Loader2, Radio, Wifi, X } from "lucide-react";
+import { Loader2, Radio, RefreshCw, Wifi, X } from "lucide-react";
 import { beamSend, makeBeamCode, type BeamHandle } from "@/lib/beam";
 import { loadApk, getCachedApk, saveFile } from "@/lib/apk-cache";
 
