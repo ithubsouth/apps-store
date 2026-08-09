@@ -1,17 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import QRCode from "qrcode";
-import {
-  Bluetooth,
-  Check,
-  Copy,
-  Download,
-  Loader2,
-  QrCode,
-  Radio,
-  Share2,
-  X,
-  Zap,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bluetooth, Loader2, Radio, Wifi, X } from "lucide-react";
 import { beamSend, makeBeamCode, type BeamHandle } from "@/lib/beam";
 import { loadApk, getCachedApk, saveFile } from "@/lib/apk-cache";
 
@@ -21,7 +9,6 @@ type ShareDialogProps = {
   appId: string;
   appName: string;
   apkFilename: string;
-  /** Public page URL for this app (works on TVs, panels, Windows). */
   pageUrl: string;
   /** Resolves a fresh, time-limited direct download URL for the APK. */
   getFileUrl: () => Promise<string>;
@@ -33,51 +20,38 @@ export function ShareDialog({
   appId,
   appName,
   apkFilename,
-  pageUrl,
   getFileUrl,
 }: ShareDialogProps) {
   const cacheKey = `apk:${appId}:${apkFilename}`;
 
   const [beamCode] = useState(() => makeBeamCode());
-  const [qr, setQr] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState<null | "file" | "link" | "save">(null);
+  const [busy, setBusy] = useState<null | "wifi" | "bt">(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [prep, setPrep] = useState(0);
+  const [showOther, setShowOther] = useState(false);
   const [beamStatus, setBeamStatus] = useState<string | null>(null);
   const [beaming, setBeaming] = useState(false);
   const [pct, setPct] = useState(0);
-  const [prep, setPrep] = useState(0);
   const beam = useRef<BeamHandle | null>(null);
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const receiveUrl = `${origin}/receive?code=${beamCode}`;
-
-  const canShare = useMemo(
-    () => typeof navigator !== "undefined" && typeof navigator.share === "function",
-    [],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    setStatus(null);
-    setBeamStatus(null);
-    setPct(0);
-    QRCode.toDataURL(receiveUrl, { width: 480, margin: 1, errorCorrectionLevel: "M" })
-      .then(setQr)
-      .catch(() => setQr(null));
-  }, [open, receiveUrl]);
+  const canShareFiles =
+    typeof navigator !== "undefined" && typeof navigator.canShare === "function";
 
   useEffect(() => {
     if (!open) {
       beam.current?.cancel();
       beam.current = null;
       setBeaming(false);
+      setStatus(null);
+      setBeamStatus(null);
+      setPct(0);
+      setPrep(0);
+      setShowOther(false);
     }
   }, [open]);
 
   if (!open) return null;
 
-  /** Fetch once, reuse for every action afterwards. */
   async function getFile() {
     const cached = getCachedApk(cacheKey);
     if (cached) return cached;
@@ -86,8 +60,36 @@ export function ShareDialog({
     );
   }
 
+  /** Hands the APK to the phone's own transfer picker (Nearby Share = Wi-Fi Direct, or Bluetooth). */
+  async function nativeSend(kind: "wifi" | "bt") {
+    setBusy(kind);
+    setStatus("Getting the app ready…");
+    try {
+      const file = await getFile();
+      if (navigator.canShare?.({ files: [file] })) {
+        setStatus(
+          kind === "wifi"
+            ? "Pick Nearby Share / Quick Share, then choose the receiving device."
+            : "Pick Bluetooth, then choose the paired device.",
+        );
+        await navigator.share({ files: [file], title: appName });
+        setStatus("Sent — the receiving device just has to accept it.");
+      } else {
+        setShowOther(true);
+        setStatus(
+          "This browser can't reach the device picker. Use the Wi-Fi transfer below instead.",
+        );
+      }
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") setStatus(null);
+      else setStatus("Transfer cancelled. Try again, or use the Wi-Fi transfer below.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function startBeam() {
-    setBeamStatus("Preparing the APK…");
+    setBeamStatus("Getting the app ready…");
     setBeaming(true);
     setPct(0);
     try {
@@ -102,7 +104,7 @@ export function ShareDialog({
         },
       });
     } catch {
-      setBeamStatus("Couldn't load the APK. Check your connection and try again.");
+      setBeamStatus("Couldn't get the app. Check your connection and try again.");
       setBeaming(false);
     }
   }
@@ -114,62 +116,12 @@ export function ShareDialog({
     setBeamStatus("Transfer stopped.");
   }
 
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(receiveUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setStatus("Couldn't copy — long-press the link to copy manually.");
-    }
-  }
-
-  async function shareLink() {
-    setBusy("link");
-    setStatus(null);
-    try {
-      await navigator.share({
-        title: appName,
-        text: `Receive ${appName} — code ${beamCode}`,
-        url: receiveUrl,
-      });
-    } catch (err) {
-      if ((err as Error)?.name !== "AbortError") setStatus("Sharing was cancelled or unavailable.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function shareFile() {
-    setBusy("file");
-    setStatus("Preparing the file…");
-    try {
-      const file = await getFile();
-      if (navigator.canShare?.({ files: [file] })) {
-        setStatus(null);
-        await navigator.share({ files: [file], title: appName });
-      } else {
-        saveFile(file, apkFilename);
-        setStatus(`This browser can't hand files to the share sheet — ${apkFilename} was saved instead.`);
-      }
-    } catch (err) {
-      if ((err as Error)?.name === "AbortError") setStatus(null);
-      else setStatus("Couldn't share the file. Try the direct beam above.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function saveApk() {
-    setBusy("save");
-    setStatus(null);
     try {
       saveFile(await getFile(), apkFilename);
       setStatus(`Saved ${apkFilename} to this device.`);
     } catch {
-      setStatus("Couldn't download the file. Check your connection and try again.");
-    } finally {
-      setBusy(null);
+      setStatus("Couldn't save the file. Check your connection and try again.");
     }
   }
 
@@ -182,7 +134,7 @@ export function ShareDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Share ${appName}`}
+        aria-label={`Send ${appName}`}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-border bg-card p-6 sm:rounded-3xl"
         style={{ boxShadow: "var(--shadow-elevated)" }}
@@ -191,126 +143,116 @@ export function ShareDialog({
           <div>
             <h2 className="font-display text-lg font-bold">Send {appName}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Laptop → phone, phone → phone, phone → TV or panel. The file transfers directly
-              between the two devices.
+              The receiver only needs Wi-Fi or Bluetooth switched on.
             </p>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close share dialog"
+            aria-label="Close"
             className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Direct beam */}
-        <div className="mt-5 rounded-2xl border border-border bg-background p-5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-            <Zap className="h-3.5 w-3.5" /> Direct beam — no manual sharing
-          </div>
-
-          <div className="mt-4 flex flex-col items-center">
-            {qr ? (
-              <img
-                src={qr}
-                alt={`QR code to receive ${appName}`}
-                className="h-40 w-40 rounded-xl bg-white p-2"
-              />
-            ) : (
-              <div className="h-40 w-40 animate-pulse rounded-xl bg-muted" />
-            )}
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              On the receiving device scan this code, or open{" "}
-              <b className="text-foreground">{origin.replace(/^https?:\/\//, "")}/receive</b> and
-              enter
-            </p>
-            <div className="mt-2 font-display text-2xl font-bold tracking-[0.3em]">{beamCode}</div>
-          </div>
-
+        <div className="mt-5 grid gap-3">
           <button
-            onClick={beaming ? stopBeam : startBeam}
-            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+            onClick={() => nativeSend("wifi")}
+            disabled={busy !== null}
+            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-70"
             style={{ background: "var(--gradient-hero)" }}
           >
-            {beaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
-            {beaming ? "Sending — tap to stop" : "Start direct transfer"}
-          </button>
-
-          {(pct > 0 || (beaming && prep > 0)) && (
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${pct || prep}%`, background: "var(--gradient-hero)" }}
-              />
-            </div>
-          )}
-          {beamStatus && (
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">{beamStatus}</p>
-          )}
-          <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">
-            On the same Wi-Fi the bytes travel straight over the local network and the APK saves
-            itself on the receiver — nothing to open in Files.
-          </p>
-        </div>
-
-        {/* Other options */}
-        <div className="mt-4 grid gap-2">
-          {canShare && (
-            <button
-              onClick={shareFile}
-              disabled={busy !== null}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
-            >
-              {busy === "file" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Bluetooth className="h-4 w-4" />
-              )}
-              Send via Bluetooth / Nearby Share
-            </button>
-          )}
-
-          {canShare && (
-            <button
-              onClick={shareLink}
-              disabled={busy !== null}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
-            >
-              <Share2 className="h-4 w-4" /> Share receive link
-            </button>
-          )}
-
-          <button
-            onClick={copyLink}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted"
-          >
-            {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-            {copied ? "Link copied" : "Copy receive link"}
-          </button>
-
-          <button
-            onClick={saveApk}
-            disabled={busy !== null}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
-          >
-            {busy === "save" ? (
+            {busy === "wifi" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Download className="h-4 w-4" />
+              <Wifi className="h-4 w-4" />
             )}
-            Save APK to this device
+            Send over Wi-Fi Direct (Nearby Share)
+          </button>
+
+          <button
+            onClick={() => nativeSend("bt")}
+            disabled={busy !== null}
+            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-70"
+          >
+            {busy === "bt" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bluetooth className="h-4 w-4" />
+            )}
+            Send over Bluetooth
           </button>
         </div>
 
+        {prep > 0 && prep < 100 && (
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${prep}%`, background: "var(--gradient-hero)" }}
+            />
+          </div>
+        )}
         {status && (
-          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">{status}</p>
+          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {status}
+          </p>
+        )}
+        {!canShareFiles && (
+          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            This browser has no device picker. Use the Wi-Fi transfer below.
+          </p>
         )}
 
-        <p className="mt-4 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
-          The APK is fetched only once per session — every transfer after that reuses the same copy
-          instead of downloading again.
-        </p>
+        <button
+          onClick={() => setShowOther((v) => !v)}
+          className="mt-5 w-full text-center text-xs font-semibold text-primary hover:underline"
+        >
+          {showOther ? "Hide other ways" : "Other ways to send"}
+        </button>
+
+        {showOther && (
+          <div className="mt-3 rounded-2xl border border-border bg-background p-5">
+            <p className="text-xs text-muted-foreground">
+              Put both devices on the same Wi-Fi — or turn on this device's hotspot and connect the
+              other one to it. On the receiver open <b className="text-foreground">/receive</b> and
+              type this code:
+            </p>
+            <div className="mt-3 text-center font-display text-2xl font-bold tracking-[0.3em]">
+              {beamCode}
+            </div>
+
+            <button
+              onClick={beaming ? stopBeam : startBeam}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-muted"
+            >
+              {beaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Radio className="h-4 w-4" />
+              )}
+              {beaming ? "Sending — tap to stop" : "Start Wi-Fi transfer"}
+            </button>
+
+            {pct > 0 && (
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${pct}%`, background: "var(--gradient-hero)" }}
+                />
+              </div>
+            )}
+            {beamStatus && (
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">{beamStatus}</p>
+            )}
+
+            <button
+              onClick={saveApk}
+              className="mt-3 w-full text-center text-[11px] text-muted-foreground hover:underline"
+            >
+              Save the APK to this device instead
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

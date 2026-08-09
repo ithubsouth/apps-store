@@ -138,7 +138,7 @@ function AppDetail() {
                   </button>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {app.apk_filename} · {app.download_count} downloads
+                  {app.apk_filename}
                 </p>
               </div>
             </div>

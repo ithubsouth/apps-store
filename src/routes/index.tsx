@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Download, Package, ArrowRight, Search, ListFilter } from "lucide-react";
 import { listApps } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes } from "@/components/site-header";
+import { DeviceSettings } from "@/components/device-settings";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -85,6 +86,8 @@ function Home() {
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-6 py-12">
+        <DeviceSettings />
+
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-display text-2xl font-bold">All apps</h2>
