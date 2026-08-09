@@ -60,18 +60,19 @@ export function ShareDialog({
     );
   }
 
-  /** Hands the APK to the phone's own transfer picker (Nearby Share = Wi-Fi Direct, or Bluetooth). */
-  async function nativeSend(kind: "wifi" | "bt") {
-    setBusy(kind);
+  /**
+   * Hands the APK to Android's own nearby-device picker (Nearby / Quick Share).
+   * That picker runs on Wi-Fi Direct underneath and lists the nearby devices by
+   * name — Bluetooth targets show up in the very same sheet, so there is no
+   * separate Bluetooth button. No browser exposes Wi-Fi Direct scanning itself.
+   */
+  async function nativeSend() {
+    setBusy("wifi");
     setStatus("Getting the app ready…");
     try {
       const file = await getFile();
       if (navigator.canShare?.({ files: [file] })) {
-        setStatus(
-          kind === "wifi"
-            ? "Pick Nearby Share / Quick Share, then choose the receiving device."
-            : "Pick Bluetooth, then choose the paired device.",
-        );
+        setStatus("Pick Nearby Share / Quick Share, then tap the receiving device in the list.");
         await navigator.share({ files: [file], title: appName });
         setStatus("Sent — the receiving device just has to accept it.");
       } else {
@@ -87,6 +88,7 @@ export function ShareDialog({
       setBusy(null);
     }
   }
+
 
   async function startBeam() {
     setBeamStatus("Getting the app ready…");
