@@ -1,5 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 
+export const ADMIN_EMAILS = [
+  "gkmech22@gmail.com",
+  "karthik.g@leadschool.in",
+  "ithub.south@leadschool.in",
+  "mohan.prasad@leadschool.in",
+  "akhilesh.gupta@leadschool.in",
+];
+
+export const isAdminEmail = (email: string) =>
+  ADMIN_EMAILS.includes(email.trim().toLowerCase());
+
 export const getAdminStatus = createServerFn({ method: "GET" }).handler(async () => {
   const { useSession } = await import("@tanstack/react-start/server");
   const { getSessionConfig } = await import("./gate.server");
