@@ -164,7 +164,103 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
           {pending && <Loader2 className="h-4 w-4 animate-spin" />} Unlock
         </button>
       </form>
+
+      {isAdminEmail(name) && (
+        <div className="mt-6 border-t border-border pt-5">
+          {!showReset ? (
+            <button
+              type="button"
+              onClick={() => setShowReset(true)}
+              className="text-xs font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              Set a new password for {name.trim().toLowerCase()}
+            </button>
+          ) : (
+            <ResetPasscode email={name} onDone={() => setShowReset(false)} />
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function ResetPasscode({ email, onDone }: { email: string; onDone: () => void }) {
+  const setPasscode = useServerFn(setAdminPasscode);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (next !== confirm) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    setPending(true);
+    try {
+      const res = await setPasscode({
+        data: { email, currentPasscode: current, newPasscode: next },
+      });
+      if (res.ok) {
+        toast.success("Password updated");
+        onDone();
+      } else {
+        toast.error(res.error || "Could not update password");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update password");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring/40 transition focus:ring-2";
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Set new password
+      </p>
+      <input
+        type="password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+        placeholder="Current password"
+        className={field}
+      />
+      <input
+        type="password"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+        placeholder="New password (min 6 chars)"
+        className={field}
+      />
+      <input
+        type="password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        placeholder="Confirm new password"
+        className={field}
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pending || !current || !next}
+          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          {pending && <Loader2 className="h-4 w-4 animate-spin" />} Save password
+        </button>
+        <button
+          type="button"
+          onClick={onDone}
+          className="h-10 rounded-xl border border-border px-4 text-sm font-semibold"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
