@@ -22,9 +22,9 @@ export const unlockAdmin = createServerFn({ method: "POST" })
   .inputValidator((data: { passcode: string }) => data)
   .handler(async ({ data }) => {
     const { useSession } = await import("@tanstack/react-start/server");
-    const { getSessionConfig, matches } = await import("./gate.server");
+    const { getSessionConfig, matches, getExpectedPasscode } = await import("./gate.server");
 
-    const expected = process.env.ADMIN_PASSCODE || "Admin@123";
+    const expected = await getExpectedPasscode();
 
     if (!data.passcode) {
       return { ok: false as const };
