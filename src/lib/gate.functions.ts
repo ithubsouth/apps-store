@@ -46,6 +46,30 @@ export const lockAdmin = createServerFn({ method: "POST" }).handler(async () => 
   return { ok: true as const };
 });
 
+export const setAdminPasscode = createServerFn({ method: "POST" })
+  .inputValidator((data: { email: string; currentPasscode: string; newPasscode: string }) => data)
+  .handler(async ({ data }) => {
+    const { matches, getExpectedPasscode, savePasscode } = await import("./gate.server");
+
+    const email = (data.email || "").trim().toLowerCase();
+    if (!isAdminEmail(email)) {
+      return { ok: false as const, error: "This email is not an authorised admin." };
+    }
+    if (!data.newPasscode || data.newPasscode.length < 6) {
+      return { ok: false as const, error: "New password must be at least 6 characters." };
+    }
+    const expected = await getExpectedPasscode();
+    if (!data.currentPasscode || !matches(data.currentPasscode, expected)) {
+      return { ok: false as const, error: "Current password is incorrect." };
+    }
+    try {
+      await savePasscode(data.newPasscode, email);
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "Could not save password." };
+    }
+    return { ok: true as const };
+  });
+
 export const fixDatabaseSecurity = createServerFn({ method: "POST" }).handler(async () => {
   return {
     success: false,
