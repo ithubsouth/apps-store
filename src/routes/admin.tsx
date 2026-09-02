@@ -9,6 +9,8 @@ import {
   lockAdmin,
   unlockAdmin,
   fixDatabaseSecurity,
+  setAdminPasscode,
+  isAdminEmail,
 } from "@/lib/gate.functions";
 import {
   createApp,
@@ -84,6 +86,7 @@ function UnlockForm({ onUnlocked }: { onUnlocked: () => void }) {
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState(false);
   const [pending, setPending] = useState(false);
+  const [showReset, setShowReset] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
