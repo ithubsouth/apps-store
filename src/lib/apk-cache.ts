@@ -6,6 +6,41 @@ const memory = new Map<string, File>();
 const inflight = new Map<string, Promise<File>>();
 
 const CACHE_NAME = "apk-cache-v1";
+const DOWNLOAD_INDEX_KEY = "apk-download-index";
+
+export type DownloadedApk = {
+  cacheKey: string;
+  filename: string;
+};
+
+function readDownloadIndex(): DownloadedApk[] {
+  try {
+    return JSON.parse(localStorage.getItem(DOWNLOAD_INDEX_KEY) ?? "[]") as DownloadedApk[];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberDownloadedApk(cacheKey: string, filename: string) {
+  const next = [
+    { cacheKey, filename },
+    ...readDownloadIndex().filter((item) => item.cacheKey !== cacheKey),
+  ];
+  localStorage.setItem(DOWNLOAD_INDEX_KEY, JSON.stringify(next.slice(0, 20)));
+  window.dispatchEvent(new Event("apk-downloads-changed"));
+}
+
+export function listDownloadedApks(): DownloadedApk[] {
+  return readDownloadIndex();
+}
+
+export async function getDownloadedApk(item: DownloadedApk): Promise<File | null> {
+  const cached = memory.get(item.cacheKey);
+  if (cached) return cached;
+  const stored = await fromCacheStorage(item.cacheKey, item.filename);
+  if (stored) memory.set(item.cacheKey, stored);
+  return stored;
+}
 
 async function fromCacheStorage(key: string, filename: string): Promise<File | null> {
   try {
@@ -80,6 +115,7 @@ export async function loadApk(
       type: "application/vnd.android.package-archive",
     });
     memory.set(cacheKey, file);
+      rememberDownloadedApk(cacheKey, filename);
     void putCacheStorage(cacheKey, file);
     return file;
   })().finally(() => inflight.delete(cacheKey));
