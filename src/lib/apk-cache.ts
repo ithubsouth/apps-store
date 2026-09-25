@@ -147,5 +147,5 @@ export function openApkInstaller(file: File) {
 
 export function openApkFileManager() {
   window.location.href =
-    "intent:#Intent;action=android.intent.action.OPEN_DOCUMENT;category=android.intent.category.OPENABLE;type=application/vnd.android.package-archive;end";
+    "intent:#Intent;action=android.intent.action.GET_CONTENT;category=android.intent.category.OPENABLE;type=application/vnd.android.package-archive;end";
 }

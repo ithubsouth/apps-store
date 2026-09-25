@@ -68,7 +68,7 @@ function AppDetail() {
         if (total > 0) setDownloadProgress(Math.round((loaded / total) * 100));
       });
       saveFile(file, app.apk_filename);
-      if (window.confirm("APK downloaded. Install it now?\nChoose Cancel to open the file manager.")) {
+      if (window.confirm("APK downloaded. Install it now?\nChoose Cancel to open the media center or file manager.")) {
         openApkInstaller(file);
       } else {
         openApkFileManager();
