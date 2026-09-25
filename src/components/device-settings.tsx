@@ -1,6 +1,7 @@
 import { Settings } from "lucide-react";
 
-const SETTINGS_INTENT = "intent:#Intent;action=android.settings.SETTINGS;end";
+const SETTINGS_INTENT =
+  "intent://settings/#Intent;scheme=android-app;action=android.settings.SETTINGS;end";
 
 export function DeviceSettings() {
   return (

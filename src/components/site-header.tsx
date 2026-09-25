@@ -1,5 +1,5 @@
 import { Link, useMatch } from "@tanstack/react-router";
-import { Package, Shield } from "lucide-react";
+import { Package, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAdminStatus } from "@/lib/gate.functions";
@@ -27,7 +27,15 @@ export function SiteHeader() {
             <div className="font-display text-sm font-bold tracking-tight">App Store</div>
           </div>
         </Link>
-        {/* Admin button is hidden from public users. Admins can access via /admin */}
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          aria-label="Refresh page"
+          title="Refresh page"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border transition hover:bg-muted"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
       </div>
     </header>
   );
