@@ -98,3 +98,15 @@ export function saveFile(file: File, filename: string) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
 }
+
+export function openApkInstaller(file: File) {
+  const blobUrl = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}

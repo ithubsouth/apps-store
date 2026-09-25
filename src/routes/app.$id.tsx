@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { ShareDialog } from "@/components/share-dialog";
-import { loadApk, saveFile } from "@/lib/apk-cache";
+import { loadApk, openApkInstaller, saveFile } from "@/lib/apk-cache";
 
 export const Route = createFileRoute("/app/$id")({
   head: () => ({
@@ -45,6 +45,7 @@ function AppDetail() {
   const getDownload = useServerFn(getDownloadUrl);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [downloadedFile, setDownloadedFile] = useState<File | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
   const { data: app, isLoading } = useQuery({
@@ -68,6 +69,7 @@ function AppDetail() {
         if (total > 0) setDownloadProgress(Math.round((loaded / total) * 100));
       });
       saveFile(file, app.apk_filename);
+      setDownloadedFile(file);
     } catch (err) {
       console.error("Cached download failed, falling back to direct navigation", err);
       const { url } = await getDownload({ data: { id } });
@@ -165,6 +167,30 @@ function AppDetail() {
                           : { width: `${downloadProgress}%`, background: "var(--gradient-hero)" }
                       }
                     />
+                  </div>
+                )}
+                {downloadedFile && !downloading && (
+                  <div className="mt-4 rounded-xl border border-border bg-muted/50 p-3">
+                    <p className="text-sm font-semibold">APK downloaded</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Install it now or cancel and install it later from Downloads.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openApkInstaller(downloadedFile)}
+                        className="h-9 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground"
+                      >
+                        Install APK
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDownloadedFile(null)}
+                        className="h-9 rounded-lg border border-border px-4 text-xs font-semibold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
                 <p className="mt-3 text-xs text-muted-foreground">
