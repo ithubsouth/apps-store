@@ -44,6 +44,7 @@ function AppDetail() {
   const { id } = Route.useParams();
   const getDownload = useServerFn(getDownloadUrl);
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
   const { data: app, isLoading } = useQuery({
@@ -58,10 +59,13 @@ function AppDetail() {
   async function handleDownload() {
     if (!app) return;
     setDownloading(true);
+    setDownloadProgress(null);
     try {
       const file = await loadApk(`apk:${id}:${app.apk_filename}`, app.apk_filename, async () => {
         const { url } = await getDownload({ data: { id } });
         return url;
+      }, (loaded, total) => {
+        if (total > 0) setDownloadProgress(Math.round((loaded / total) * 100));
       });
       saveFile(file, app.apk_filename);
     } catch (err) {
@@ -69,7 +73,10 @@ function AppDetail() {
       const { url } = await getDownload({ data: { id } });
       window.location.href = url;
     } finally {
-      setTimeout(() => setDownloading(false), 1200);
+      setTimeout(() => {
+        setDownloading(false);
+        setDownloadProgress(null);
+      }, 1200);
     }
   }
 
@@ -128,7 +135,11 @@ function AppDetail() {
                     ) : (
                       <Download className="h-4 w-4" />
                     )}
-                    {downloading ? "Preparing..." : "Download APK"}
+                    {downloading
+                      ? downloadProgress === null
+                        ? "Downloading..."
+                        : `Downloading ${downloadProgress}%`
+                      : "Download APK"}
                   </button>
                   <button
                     onClick={() => setShareOpen(true)}
@@ -137,6 +148,25 @@ function AppDetail() {
                     <Share2 className="h-4 w-4" /> Share
                   </button>
                 </div>
+                {downloading && (
+                  <div
+                    className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label="APK download progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={downloadProgress ?? undefined}
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all ${downloadProgress === null ? "w-1/3 animate-pulse" : ""}`}
+                      style={
+                        downloadProgress === null
+                          ? { background: "var(--gradient-hero)" }
+                          : { width: `${downloadProgress}%`, background: "var(--gradient-hero)" }
+                      }
+                    />
+                  </div>
+                )}
                 <p className="mt-3 text-xs text-muted-foreground">
                   {app.apk_filename}
                 </p>
