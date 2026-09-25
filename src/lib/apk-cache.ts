@@ -139,10 +139,13 @@ export function openApkInstaller(file: File) {
   const blobUrl = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = blobUrl;
-  a.target = "_blank";
-  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
+export function openApkFileManager() {
+  window.location.href =
+    "intent:#Intent;action=android.intent.action.OPEN_DOCUMENT;category=android.intent.category.OPENABLE;type=application/vnd.android.package-archive;end";
 }

@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAdminStatus } from "@/lib/gate.functions";
-import { getDownloadedApk, listDownloadedApks, openApkInstaller, type DownloadedApk } from "@/lib/apk-cache";
+import {
+  getDownloadedApk,
+  listDownloadedApks,
+  openApkFileManager,
+  openApkInstaller,
+  type DownloadedApk,
+} from "@/lib/apk-cache";
 
 export function SiteHeader() {
   const status = useServerFn(getAdminStatus);
@@ -62,7 +68,11 @@ function DownloadedAppsMenu() {
 
   async function install(item: DownloadedApk) {
     const file = await getDownloadedApk(item);
-    if (file) openApkInstaller(file);
+    if (file) {
+      openApkInstaller(file);
+    } else {
+      window.alert("This APK is no longer available in browser storage. Download it again.");
+    }
   }
 
   return (
@@ -105,6 +115,13 @@ function DownloadedAppsMenu() {
               ))}
             </div>
           )}
+          <button
+            type="button"
+            onClick={openApkFileManager}
+            className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-muted"
+          >
+            Open file manager
+          </button>
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getApp, getDownloadUrl } from "@/lib/apps.functions";
 import { SiteHeader, formatBytes, formatDate } from "@/components/site-header";
 import { ShareDialog } from "@/components/share-dialog";
-import { loadApk, openApkInstaller, saveFile } from "@/lib/apk-cache";
+import { loadApk, openApkFileManager, openApkInstaller, saveFile } from "@/lib/apk-cache";
 
 export const Route = createFileRoute("/app/$id")({
   head: () => ({
@@ -68,8 +68,10 @@ function AppDetail() {
         if (total > 0) setDownloadProgress(Math.round((loaded / total) * 100));
       });
       saveFile(file, app.apk_filename);
-      if (window.confirm("APK downloaded. Install it now?\nChoose Cancel to install it later.")) {
+      if (window.confirm("APK downloaded. Install it now?\nChoose Cancel to open the file manager.")) {
         openApkInstaller(file);
+      } else {
+        openApkFileManager();
       }
     } catch (err) {
       console.error("Cached download failed, falling back to direct navigation", err);
