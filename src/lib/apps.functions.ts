@@ -34,51 +34,55 @@ async function signIcon(path: string | null | undefined): Promise<string | null>
   return data?.signedUrl ?? null;
 }
 
-export const listApps = createServerFn({ method: "GET" }).handler(async () => {
-  const sb = await admin();
+export const listApps = createServerFn({ method: "GET" })
+  .inputValidator((data: { includeHistory?: boolean } | undefined) => data ?? {})
+  .handler(async ({ data: options }) => {
+    const sb = await admin();
 
-  try {
-    // Try with sort_order, but catch failure immediately
-    const { data, error } = await sb
-      .from("apps")
-      .select(`${APP_COLUMNS}, sort_order`)
-      .order("sort_order", { ascending: true })
-      .order("updated_at", { ascending: false });
+    try {
+      // Try with sort_order, but catch failure immediately
+      const { data: rows, error } = await sb
+        .from("apps")
+        .select(`${APP_COLUMNS}, sort_order`)
+        .order("sort_order", { ascending: true })
+        .order("updated_at", { ascending: false });
 
-    if (error && error.message.includes("sort_order")) {
-      console.warn("sort_order missing, falling back to basic columns");
-      const { data: fallback, error: fallbackErr } = await sb
+      if (error && error.message.includes("sort_order")) {
+        console.warn("sort_order missing, falling back to basic columns");
+        const { data: fallback, error: fallbackErr } = await sb
+          .from("apps")
+          .select(APP_COLUMNS)
+          .order("updated_at", { ascending: false });
+
+        if (fallbackErr) throw new Error(fallbackErr.message);
+        return processResults(fallback, sb, options.includeHistory);
+      }
+
+      if (error) throw new Error(error.message);
+      return processResults(rows, sb, options.includeHistory);
+    } catch (e) {
+      console.error("listApps failed, using ultimate fallback", e);
+      const { data: fallback } = await sb
         .from("apps")
         .select(APP_COLUMNS)
         .order("updated_at", { ascending: false });
-
-      if (fallbackErr) throw new Error(fallbackErr.message);
-      return processResults(fallback, sb);
+      return processResults(fallback || [], sb, options.includeHistory);
     }
+  });
 
-    if (error) throw new Error(error.message);
-    return processResults(data, sb);
-  } catch (e) {
-    console.error("listApps failed, using ultimate fallback", e);
-    const { data: fallback } = await sb
-      .from("apps")
-      .select(APP_COLUMNS)
-      .order("updated_at", { ascending: false });
-    return processResults(fallback || [], sb);
-  }
-});
+async function processResults(data: any[] | null, sb: any, includeHistory = false) {
+  const rows = await Promise.all(
+    (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
+  );
 
-async function processResults(data: any[] | null, sb: any) {
-  // Get audit logs
+  if (!includeHistory) return { apps: rows, history: [] };
+
   const { data: logs } = await sb
     .from("audit_logs")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const rows = await Promise.all(
-    (data ?? []).map(async (a) => ({ ...a, icon_url: await signIcon(a.icon_path) })),
-  );
   return { apps: rows, history: logs ?? [] };
 }
 

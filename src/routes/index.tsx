@@ -35,7 +35,9 @@ function Home() {
   const [sortBy, setSortBy] = useState<SortOption>("manual");
   const { data, isLoading } = useQuery({
     queryKey: ["apps"],
-    queryFn: () => listApps(),
+    queryFn: () => listApps({ data: {} }),
+    staleTime: 30_000,
+    retry: 1,
   });
 
   const apps = data?.apps || [];

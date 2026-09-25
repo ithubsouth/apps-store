@@ -277,7 +277,7 @@ function AdminPanel({ onLock }: { onLock: () => void }) {
   const [historyCount, setHistoryCount] = useState(15);
   const { data, refetch, isLoading } = useQuery({
     queryKey: ["apps-admin"],
-    queryFn: () => listApps(),
+    queryFn: () => listApps({ data: { includeHistory: true } }),
   });
 
   const reorder = useServerFn(reorderApps);
