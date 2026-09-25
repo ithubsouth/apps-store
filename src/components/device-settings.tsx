@@ -1,10 +1,14 @@
 import { Settings } from "lucide-react";
 import type { MouseEvent } from "react";
 
-const SETTINGS_INTENT =
-  "intent://settings/#Intent;action=android.settings.SETTINGS;end";
+const SETTINGS_INTENT = "intent://settings/#Intent;action=android.settings.SETTINGS;end";
+const LENOVO_SETTINGS_INTENT =
+  "intent://settings/#Intent;action=android.settings.SETTINGS;package=com.android.settings;end";
 
 export function DeviceSettings() {
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const isLenovoTablet = /Lenovo|TB301FU|TB301XU|TB305FU/i.test(userAgent);
+
   function openSettings(event: MouseEvent<HTMLAnchorElement>) {
     const androidBridge = (
       window as Window & { Android?: { openSystemSettings?: () => void } }
@@ -18,7 +22,7 @@ export function DeviceSettings() {
 
   return (
     <a
-      href={SETTINGS_INTENT}
+      href={isLenovoTablet ? LENOVO_SETTINGS_INTENT : SETTINGS_INTENT}
       onClick={(event) => {
         if (!/Android/i.test(navigator.userAgent)) event.preventDefault();
         else openSettings(event);
