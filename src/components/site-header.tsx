@@ -17,7 +17,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-lg">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5">
           <span
             className="grid h-9 w-9 place-items-center rounded-xl text-primary-foreground shadow-sm"
@@ -36,7 +36,7 @@ export function SiteHeader() {
             onClick={() => window.location.reload()}
             aria-label="Refresh page"
             title="Refresh page"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border transition hover:bg-muted"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:bg-muted sm:h-9 sm:w-9"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -72,7 +72,7 @@ function DownloadedAppsMenu() {
         onClick={() => setOpen((value) => !value)}
         aria-label="View downloaded apps"
         title="View downloaded apps"
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border transition hover:bg-muted"
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:bg-muted sm:h-9 sm:w-9"
       >
         <Download className="h-4 w-4" />
         {downloads.length > 0 && (
@@ -83,7 +83,7 @@ function DownloadedAppsMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-border bg-card p-3 shadow-lg">
+        <div className="absolute right-0 top-12 z-50 w-[calc(100vw-2rem)] max-w-72 rounded-xl border border-border bg-card p-3 shadow-lg sm:top-11">
           <p className="text-sm font-semibold">Downloaded apps</p>
           {downloads.length === 0 ? (
             <p className="mt-2 text-xs text-muted-foreground">No APKs downloaded yet.</p>
@@ -97,7 +97,7 @@ function DownloadedAppsMenu() {
                   <button
                     type="button"
                     onClick={() => install(item)}
-                    className="shrink-0 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground"
+                    className="shrink-0 rounded-md bg-primary px-3 py-2 text-[11px] font-semibold text-primary-foreground"
                   >
                     Install
                   </button>
