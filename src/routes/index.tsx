@@ -27,7 +27,8 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-type SortOption = "manual" | "newest" | "oldest" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
+type SortOption =
+  "manual" | "newest" | "oldest" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
 
 function Home() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,10 +46,11 @@ function Home() {
     const query = searchQuery.toLowerCase().trim();
 
     if (query) {
-      result = result.filter(app =>
-        app.name.toLowerCase().includes(query) ||
-        app.category.toLowerCase().includes(query) ||
-        app.description.toLowerCase().includes(query)
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(query) ||
+          app.category.toLowerCase().includes(query) ||
+          app.description.toLowerCase().includes(query),
       );
     }
 
@@ -58,9 +60,15 @@ function Home() {
         case "manual":
           return (a.sort_order || 0) - (b.sort_order || 0);
         case "newest":
-          return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+          return (
+            new Date(b.updated_at || b.created_at).getTime() -
+            new Date(a.updated_at || a.created_at).getTime()
+          );
         case "oldest":
-          return new Date(a.updated_at || a.created_at).getTime() - new Date(b.updated_at || b.created_at).getTime();
+          return (
+            new Date(a.updated_at || a.created_at).getTime() -
+            new Date(b.updated_at || b.created_at).getTime()
+          );
         case "name-asc":
           return a.name.localeCompare(b.name);
         case "name-desc":
@@ -86,8 +94,6 @@ function Home() {
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-6 py-12">
-        <DeviceSettings />
-
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-display text-2xl font-bold">All apps</h2>
@@ -124,6 +130,8 @@ function Home() {
                 <option value="size-asc">Smallest Size</option>
               </select>
             </div>
+
+            <DeviceSettings />
           </div>
         </div>
 
@@ -146,7 +154,7 @@ function Home() {
             {visibleCount < filteredApps.length && (
               <div className="mt-12 flex justify-center">
                 <button
-                  onClick={() => setVisibleCount(prev => prev + 12)}
+                  onClick={() => setVisibleCount((prev) => prev + 12)}
                   className="rounded-full border border-border bg-card px-8 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted"
                 >
                   Load more apps
