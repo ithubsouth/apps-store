@@ -47,8 +47,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val name = "LEAD-${Build.MODEL.take(12)}"
         transfer = NearbyTransfer(applicationContext, name)
+        openSettingsIfRequested(intent)
         handleIncomingShare(intent?.let { i -> if (i.action == android.content.Intent.ACTION_SEND) i.getParcelableExtra<Uri>(android.content.Intent.EXTRA_STREAM) else null })
         setContent { MaterialTheme(colorScheme = lightColorScheme()) { App(transfer) } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openSettingsIfRequested(intent)
+    }
+
+    private fun openSettingsIfRequested(intent: android.content.Intent?) {
+        if (intent?.data?.scheme == "leadappshare" && intent.data?.host == "open-settings") {
+            startActivity(android.content.Intent(Settings.ACTION_SETTINGS))
+        }
     }
 
     private fun handleIncomingShare(uri: Uri?) {
