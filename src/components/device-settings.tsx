@@ -1,8 +1,7 @@
 import { Settings } from "lucide-react";
 import type { MouseEvent } from "react";
 
-const NATIVE_SETTINGS_URI = "leadappshare://open-settings";
-const SETTINGS_INTENT = "intent://settings/#Intent;action=android.settings.SETTINGS;end";
+const SETTINGS_INTENT = "intent://#Intent;action=android.settings.SETTINGS;end";
 
 export function DeviceSettings() {
   function openSettings(event: MouseEvent<HTMLAnchorElement>) {
@@ -16,10 +15,7 @@ export function DeviceSettings() {
       return;
     }
 
-    window.location.href = NATIVE_SETTINGS_URI;
-    window.setTimeout(() => {
-      window.location.href = SETTINGS_INTENT;
-    }, 500);
+    window.location.href = SETTINGS_INTENT;
   }
 
   return (
