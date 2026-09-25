@@ -138,7 +138,7 @@ function Home() {
         </div>
 
         {isLoading ? (
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="h-56 animate-pulse rounded-2xl bg-muted" />
             ))}
@@ -147,7 +147,7 @@ function Home() {
           <EmptyState isSearching={searchQuery.length > 0} />
         ) : (
           <>
-            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
               {displayedApps.map((a) => (
                 <AppCard key={a.id} app={a} />
               ))}

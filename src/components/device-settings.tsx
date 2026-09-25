@@ -1,14 +1,27 @@
 import { Settings } from "lucide-react";
+import type { MouseEvent } from "react";
 
 const SETTINGS_INTENT =
-  "intent://settings/#Intent;scheme=android-app;action=android.settings.SETTINGS;end";
+  "intent://settings/#Intent;action=android.settings.SETTINGS;end";
 
 export function DeviceSettings() {
+  function openSettings(event: MouseEvent<HTMLAnchorElement>) {
+    const androidBridge = (
+      window as Window & { Android?: { openSystemSettings?: () => void } }
+    ).Android;
+
+    if (androidBridge?.openSystemSettings) {
+      event.preventDefault();
+      androidBridge.openSystemSettings();
+    }
+  }
+
   return (
     <a
       href={SETTINGS_INTENT}
       onClick={(event) => {
         if (!/Android/i.test(navigator.userAgent)) event.preventDefault();
+        else openSettings(event);
       }}
       aria-label="Open system settings"
       title="Open system settings"

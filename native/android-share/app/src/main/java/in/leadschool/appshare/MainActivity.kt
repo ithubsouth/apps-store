@@ -342,6 +342,13 @@ fun App(transfer: NearbyTransfer) {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Open Wi-Fi settings") }
+
+            TextButton(
+                onClick = {
+                    context.startActivity(android.content.Intent(Settings.ACTION_SETTINGS))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Open system settings") }
         }
     }
 }
